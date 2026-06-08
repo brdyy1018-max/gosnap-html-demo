@@ -102,6 +102,13 @@ const state = {
     seg('task_done_high_013', 'Pico Blvd', '2300 Pico Blvd, Santa Monica, CA', { lat: 34.028, lng: -118.455 }, { lat: 34.032, lng: -118.448 }, { display_state: 'completed_local', priority: 'high' }),
     seg('task_second_high_014', 'Lincoln Blvd', '3100 Lincoln Blvd, Santa Monica, CA', { lat: 34.018, lng: -118.47 }, { lat: 34.022, lng: -118.462 }, { dispatch_round: 'second', priority: 'high' }),
     seg('task_claimed_second_high_015', 'Sepulveda Blvd', '11000 Sepulveda Blvd, Los Angeles, CA', { lat: 34.24, lng: -118.47 }, { lat: 34.245, lng: -118.462 }, { display_state: 'claimed', claimed_by_me: true, dispatch_round: 'second', priority: 'high' }),
+    seg('task_high_unclaimed_016', 'La Brea Ave', '450 S La Brea Ave, Los Angeles, CA', { lat: 34.068, lng: -118.344 }, { lat: 34.072, lng: -118.338 }, { priority: 'high' }),
+    seg('task_second_normal_017', 'Crenshaw Blvd', '3600 Crenshaw Blvd, Los Angeles, CA', { lat: 34.015, lng: -118.331 }, { lat: 34.02, lng: -118.325 }, { dispatch_round: 'second' }),
+    seg('task_high_second_018', 'Santa Monica Blvd', '8400 Santa Monica Blvd, West Hollywood, CA', { lat: 34.09, lng: -118.38 }, { lat: 34.094, lng: -118.372 }, { priority: 'high', dispatch_round: 'second' }),
+    seg('task_normal_open_019', 'Alameda St', '800 N Alameda St, Los Angeles, CA', { lat: 34.055, lng: -118.238 }, { lat: 34.058, lng: -118.232 }),
+    seg('task_second_claimed_020', 'Western Ave', '5200 Western Ave, Los Angeles, CA', { lat: 34.105, lng: -118.309 }, { lat: 34.108, lng: -118.302 }, { display_state: 'claimed', claimed_by_me: true, dispatch_round: 'second' }),
+    seg('task_high_completed_021', 'Olympic Blvd', '1800 W Olympic Blvd, Los Angeles, CA', { lat: 34.052, lng: -118.305 }, { lat: 34.055, lng: -118.298 }, { display_state: 'completed_local', priority: 'high' }),
+    seg('task_second_completed_022', 'Vermont Ave North', '3000 N Vermont Ave, Los Angeles, CA', { lat: 34.115, lng: -118.292 }, { lat: 34.118, lng: -118.286 }, { display_state: 'completed_local', dispatch_round: 'second' }),
   ],
   records: [
     { task_id: 'task_done_100', title: 'Sorrento Valley', shot_at: new Date().toISOString(), duration: '10m3s', size: '50.2M', status: 'approved', sector: 'Sector 4-B' },
@@ -141,6 +148,22 @@ function getLifecycleColor(t) {
   if (lc === 'completed') return COLORS.completed;
   if (lc === 'claimed') return COLORS.claimed;
   return COLORS.unclaimed;
+}
+
+/** PRD: unclaimed high-priority routes render red; otherwise lifecycle color */
+function getTaskLineColor(t) {
+  if (getTaskLifecycle(t) === 'unclaimed' && getTaskPriority(t) === 'high') {
+    return COLORS.high;
+  }
+  return getLifecycleColor(t);
+}
+
+function renderTaskBadges(t) {
+  const badges = [];
+  if (t.priority === 'high') badges.push('<span class="badge badge-high">High priority</span>');
+  if (t.dispatch_round === 'second') badges.push('<span class="badge badge-second">2nd dispatch</span>');
+  if (!badges.length) return '';
+  return `<div class="badges">${badges.join('')}</div>`;
 }
 
 function filterTasksByMapFilters(tasks, filters) {
@@ -367,10 +390,7 @@ const App = {
     visible.forEach((t) => {
       const latlngs = t.polyline.map((p) => [p.lat, p.lng]);
       const isSelected = t.task_id === state.selectedTaskId;
-      const color =
-        isSelected && getTaskLifecycle(t) === 'claimed'
-          ? COLORS.high
-          : getLifecycleColor(t);
+      const color = getTaskLineColor(t);
       const line = L.polyline(latlngs, {
         color,
         weight: isSelected ? 8 : 5,
@@ -456,6 +476,8 @@ const App = {
 
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
+      <div class="sheet-accent" style="background:${getTaskLineColor(t)}"></div>
+      ${renderTaskBadges(t)}
       <div class="sheet-title">${title}</div>
       <div class="sheet-desc">${desc}</div>
       <div class="sheet-route">${t.poi_name}</div>

@@ -731,6 +731,12 @@ body {
   margin: 8px auto 14px;
 }
 
+.sheet-accent {
+  height: 4px;
+  border-radius: 2px;
+  margin: 0 0 12px;
+}
+
 .sheet-title {
   font-size: 18px;
   font-weight: 800;
@@ -807,7 +813,11 @@ body {
   text-transform: uppercase;
   padding: 4px 8px;
   border-radius: 6px;
+  letter-spacing: 0.02em;
 }
+
+.badge-high { background: #fee2e2; color: #ef4444; }
+.badge-second { background: #ede9fe; color: #8b5cf6; }
 
 /* Tasks */
 .back-header {
