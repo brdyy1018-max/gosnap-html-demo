@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>GoSnap — LBS Road Test Demo</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="styles.css?v=20260527" />
+  </head>
+  <body>
+    <div class="phone" id="app">
+      <!-- LOGIN -->
+      <div class="screen login-screen active" id="screen-login">
+        <div class="login-gradient">
+          <div class="login-logo-ring">
+            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <circle cx="24" cy="24" r="24" fill="rgba(255,255,255,0.18)" />
+              <path d="M24 10c-4.5 0-8 3.2-8 7.2 0 3.1 2 5.8 4.8 6.8L24 38l3.2-14c2.8-1 4.8-3.7 4.8-6.8C32 13.2 28.5 10 24 10z" fill="#fff"/>
+            </svg>
+          </div>
+          <h1>GoSnap</h1>
+          <p>Discover the good life</p>
+        </div>
+        <div class="login-card">
+          <div class="field">
+            <label>Region</label>
+            <input id="login-region" value="US" />
+          </div>
+          <div class="field">
+            <label>User ID</label>
+            <input id="login-user" value="US-156" />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input id="login-pass" type="password" value="demo" />
+          </div>
+          <button class="btn btn-primary" onclick="App.login()">Sign In</button>
+        </div>
+      </div>
+
+      <!-- PRE-CHECK -->
+      <div class="screen" id="screen-precheck">
+        <div class="blue-header">
+          <button class="header-icon" onclick="App.go('login')">←</button>
+          <span>Pre-check</span>
+          <button class="header-icon" onclick="App.refreshPrecheck()">↻</button>
+        </div>
+        <div class="info-banner">
+          Verify GPS, Bluetooth, network, and storage before connecting your GoPro and starting
+          road test tasks.
+        </div>
+        <div class="scroll precheck-body">
+          <div class="check-list" id="check-list"></div>
+        </div>
+        <div class="sticky-footer">
+          <button class="btn btn-primary" id="btn-start-check" onclick="App.startCheck()">
+            Start check
+          </button>
+        </div>
+      </div>
+
+      <!-- MAP -->
+      <div class="screen" id="screen-map">
+        <div class="map-wrap">
+          <div class="map-top-chrome" id="map-top-chrome">
+            <div class="map-top-left">
+              <span class="map-cam-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="3.5" />
+                </svg>
+              </span>
+              <div class="device-pill" id="device-pill">
+                <span class="device-dot" id="device-dot"></span>
+                <span class="device-conn" id="device-conn">CONN</span>
+                <span class="device-signal" aria-hidden="true">
+                  <svg viewBox="0 0 16 12" fill="currentColor">
+                    <rect x="0" y="8" width="2.5" height="4" rx="0.5" />
+                    <rect x="4" y="5" width="2.5" height="7" rx="0.5" />
+                    <rect x="8" y="2" width="2.5" height="10" rx="0.5" />
+                    <rect x="12" y="0" width="2.5" height="12" rx="0.5" />
+                  </svg>
+                </span>
+                <span class="device-batt" id="device-batt">98</span>
+                <span class="device-sd" aria-hidden="true">
+                  <svg viewBox="0 0 14 16" fill="currentColor">
+                    <path d="M1 2h8l4 4v10H1V2zm6 0v4h4" opacity="0.9" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <button class="profile-fab" onclick="App.go('settings')" aria-label="Profile">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+              </svg>
+            </button>
+          </div>
+          <div id="map"></div>
+          <div class="nav-banner hidden" id="nav-banner">
+            <div class="nav-turn">↱</div>
+            <div class="nav-dist">2.5 km</div>
+          </div>
+          <div class="speed-pill hidden" id="speed-pill">
+            <span class="speed-limit">25</span>
+            <span class="speed-dist">1.8 km/h</span>
+          </div>
+          <div class="map-rail" id="map-rail">
+            <button class="rail-btn" onclick="App.openFilterSheet()" aria-label="Filter">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button class="rail-btn" onclick="App.go('tasks')" aria-label="History">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
+                <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M12 7v5l3 2" stroke-linecap="round" />
+              </svg>
+            </button>
+            <div class="rail-zoom">
+              <button onclick="App.zoomMap(1)" aria-label="Zoom in">+</button>
+              <button onclick="App.zoomMap(-1)" aria-label="Zoom out">−</button>
+            </div>
+            <button class="rail-btn" onclick="App.locateUser()" aria-label="My location">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Record ready (big red button) -->
+          <div class="record-ready hidden" id="record-ready">
+            <button class="record-fab" onclick="App.tapRecord()" aria-label="Start recording"></button>
+            <p>Drive the route — capture in progress</p>
+          </div>
+
+          <!-- Active recording panel -->
+          <div class="recording-panel hidden" id="recording-panel">
+            <div class="rec-location" id="rec-location">Sorrento Valley</div>
+            <div class="rec-timer-row">
+              <span class="rec-dot"></span>
+              <span id="rec-time">0:00</span>
+            </div>
+            <div class="rec-waveform" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <p class="rec-hint">Drive the route — capture in progress</p>
+          </div>
+
+          <!-- Drive controls: stop | timer | complete -->
+          <div class="drive-bar hidden" id="drive-bar">
+            <button class="drive-stop" id="drive-stop" onclick="App.stopRecording()"></button>
+            <span class="drive-timer" id="drive-timer">0:00</span>
+            <button class="drive-done hidden" id="drive-done" onclick="App.completeTask()">✓</button>
+          </div>
+        </div>
+        <div class="sheet hidden" id="task-sheet"></div>
+      </div>
+
+      <!-- TASKS -->
+      <div class="screen" id="screen-tasks">
+        <div class="back-header">
+          <button class="icon-btn" onclick="App.go('map')">←</button>
+          <h2>Tasks</h2>
+        </div>
+        <div class="tasks-summary" id="tasks-summary"></div>
+        <div class="filter-row" id="task-filters"></div>
+        <div class="scroll">
+          <div class="settlement-entry">
+            <button class="btn btn-outline" onclick="App.go('progress-map')">Settlement Map</button>
+          </div>
+          <div class="task-list" id="task-list"></div>
+        </div>
+      </div>
+
+      <!-- SETTLEMENT MAP -->
+      <div class="screen" id="screen-progress-map">
+        <div class="back-header">
+          <button class="icon-btn" onclick="App.go('tasks')">←</button>
+          <h2>Settlement Map</h2>
+        </div>
+        <div class="map-wrap" style="flex: 1.2">
+          <div id="progress-map"></div>
+          <button class="layer-fab" onclick="App.toggleProgressLayers()" title="Progress layers">
+            <span class="layers-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M4 8l8-4 8 4-8-4z" />
+                <path d="M4 12l8 4 8-4" />
+                <path d="M4 16l8 4 8-4" />
+              </svg>
+            </span>
+          </button>
+        </div>
+        <div class="settlement-panel" id="settlement-panel"></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="screen" id="screen-settings">
+        <div class="settings-hero">
+          <button class="header-icon light" onclick="App.go('map')">←</button>
+          <div class="profile-hero">
+            <div class="avatar lg">US</div>
+            <div>
+              <strong>US-156</strong>
+              <div class="profile-id">ID · US-156-8842</div>
+            </div>
+          </div>
+        </div>
+        <div class="scroll settings">
+          <div class="section-title">System configuration</div>
+          <div class="settings-group">
+            <div class="settings-row" onclick="App.go('precheck')">
+              <span class="row-left"><span class="row-icon">📷</span>Device</span>
+              <span class="muted">GoPro HERO ›</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">🌐</span>Language</span>
+              <span class="muted">English ›</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">🕐</span>Time zone</span>
+              <span class="muted">UTC-8 ›</span>
+            </div>
+          </div>
+          <div class="section-title">Support & feedback</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">❓</span>Help center</span>
+              <span class="muted">›</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">✉️</span>Contact us</span>
+              <span class="muted">›</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">⚠️</span>Report a problem</span>
+              <span class="muted">›</span>
+            </div>
+          </div>
+          <div class="section-title">Privacy & security</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">🔔</span>Push notifications</span>
+              <label class="toggle"><input type="checkbox" checked /><span></span></label>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">🔒</span>Password</span>
+              <span class="muted">›</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-left"><span class="row-icon">🛡️</span>Two-factor auth</span>
+              <span class="muted">Off ›</span>
+            </div>
+          </div>
+          <button class="logout-btn" onclick="App.openLogoutModal()">Log out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom sheets & modals -->
+    <div class="overlay overlay-sheet" id="modal-location">
+      <div class="bottom-sheet">
+        <strong>Location Permission Required</strong>
+        <p class="sheet-sub">Always Allow and Precise Location are required for on-site verification.</p>
+        <div class="perm-row"><span>While using the app</span><span class="perm-off">Off</span></div>
+        <div class="perm-row on"><span>Always Allow</span><span class="perm-on">On</span></div>
+        <button class="btn btn-primary" onclick="App.fixCheck('gps')">Confirm</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-bluetooth">
+      <div class="bottom-sheet bluetooth-sheet">
+        <div class="bt-icon">📶</div>
+        <h3>Bluetooth Connection</h3>
+        <p>Turn on Bluetooth to connect your GoPro capture device.</p>
+        <button class="btn btn-primary" onclick="App.fixCheck('bluetooth')">Next</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-battery">
+      <div class="bottom-sheet alert-sheet">
+        <div class="alert-icon red">🔋</div>
+        <h3>Low Battery Alert</h3>
+        <p>GoPro battery is below 20%. Charge before starting a long route.</p>
+        <button class="btn btn-primary" onclick="App.closeModal('modal-battery')">I understand</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-network">
+      <div class="bottom-sheet alert-sheet">
+        <div class="alert-icon red">📡</div>
+        <h3>Network Connection Failed</h3>
+        <p>Check your network connection and try again.</p>
+        <button class="btn btn-primary" onclick="App.fixCheck('network')">Check connection</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-storage">
+      <div class="bottom-sheet alert-sheet">
+        <div class="alert-icon red">💾</div>
+        <h3>Insufficient Storage Space</h3>
+        <p>Free up space on your GoPro SD card before recording.</p>
+        <button class="btn btn-primary" onclick="App.fixCheck('storage')">Clear up space</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-precondition">
+      <div class="bottom-sheet precondition-sheet">
+        <div class="sheet-top">
+          <strong>Precondition</strong>
+          <button class="sheet-close" onclick="App.closeModal('modal-precondition')">×</button>
+        </div>
+        <div id="precondition-rows"></div>
+        <button class="btn btn-primary" id="btn-precondition-go" onclick="App.preconditionGo()">Go</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="modal-safety">
+      <div class="modal modal-start">
+        <div class="modal-icon-box">📹</div>
+        <h3>Start Take Video</h3>
+        <p>
+          You're about to start record <strong>without interruption</strong>. Make sure you're safe
+          to finish.
+        </p>
+        <label class="checkbox-row">
+          <input type="checkbox" id="skip-safety" />
+          <span>Don't show again</span>
+        </label>
+        <button class="btn btn-primary" onclick="App.confirmSafety()">Got it, Begin</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="modal-logout">
+      <div class="modal">
+        <h3>Do you want to sign out?</h3>
+        <p>You'll need to sign in again to access your tasks.</p>
+        <button class="btn btn-danger" onclick="App.logout()">Sign out</button>
+        <button class="btn btn-ghost" onclick="App.closeModal('modal-logout')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="modal-undo">
+      <div class="modal">
+        <h3>Undo submission</h3>
+        <p>Withdraw this upload and return the task to Claimed?</p>
+        <button class="btn btn-danger" id="undo-confirm-btn">Undo</button>
+        <button class="btn btn-ghost" onclick="App.closeModal('modal-undo')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="filter-sheet">
+      <div class="filter-panel">
+        <div class="sheet-handle"></div>
+        <div class="sheet-top">
+          <strong>Task Filter</strong>
+          <button class="sheet-close" onclick="App.closeFilterSheet()">×</button>
+        </div>
+        <div class="filter-body" id="filter-sheet-body"></div>
+        <div class="filter-actions">
+          <button class="btn btn-reset" onclick="App.resetFilterDraft()">Reset</button>
+          <button class="btn btn-primary" onclick="App.applyFilters()">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer-panel" id="progress-layer-panel"></div>
+    <div class="dropdown" id="card-dropdown"></div>
+    <div class="toast" id="toast"></div>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="app.js?v=20260527"></script>
+  </body>
+</html>

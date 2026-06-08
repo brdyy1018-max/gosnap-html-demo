@@ -1,0 +1,7 @@
+.DS_Store
+auth-qrcode.png
+log/
+gosnap-app/node_modules/
+gosnap-app/.expo/
+gosnap-app/dist/
+*.log
