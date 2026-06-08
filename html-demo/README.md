@@ -6,13 +6,19 @@ Standalone browser demo for **GoSnap V1.0** — no build step required.
 
 ```bash
 cd html-demo
-# Option 1: open file directly
-open index.html
-
-# Option 2: local server (recommended for map tiles)
 python3 -m http.server 8080
-# then visit http://localhost:8080
+# visit http://localhost:8080/?demo=map
 ```
+
+## GitHub Pages
+
+This folder is deployed automatically via `.github/workflows/deploy-demo.yml` when pushed to `main`.
+
+Live URL after deploy:
+
+`https://<github-username>.github.io/<repo-name>/`
+
+Map demo shortcut: append `?demo=map`
 
 ## Included flows
 
