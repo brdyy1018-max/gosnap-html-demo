@@ -1,17 +1,17 @@
 /* GoSnap HTML Demo — aligned to design mockups */
 
 const COLORS = {
-  unclaimed: '#155dfc',
-  claimed: '#f59e0b',
-  completed: '#16a34a',
+  unclaimed: '#0052D9',
+  claimed: '#F59E0B',
+  completed: '#2BA471',
   second: '#8B5CF6',
-  high: '#f62929',
+  high: '#EF4444',
   progress: {
     completed: '#6366F1',
     collected: '#0EA5E9',
     reviewing: '#F59E0B',
-    approved: '#16a34a',
-    rejected: '#f62929',
+    approved: '#2BA471',
+    rejected: '#EF4444',
   },
 };
 
@@ -47,18 +47,11 @@ const PROGRESS_LAYERS = [
 
 const SETTLEMENT_BOTTOM = ['reviewing', 'approved', 'rejected'];
 
-const CHECK_ICONS = {
-  gps: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21s6-5.2 6-10a6 6 0 10-12 0c0 4.8 6 10 6 10z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="11" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>',
-  battery: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M21 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="6" y="10" width="8" height="4" rx="1" fill="currentColor"/></svg>',
-  network: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>',
-  storage: '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="4" y="14" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M7 7h.01M7 17h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>',
-};
-
 const DEVICE_CHECKS = [
-  { id: 'gps', title: 'GPS Positioning', subtitleOk: 'Set to Always Allow', subtitleErr: 'Permission required', modal: 'modal-location' },
-  { id: 'battery', title: 'Device Battery', subtitleOk: 'Bat Lvl : 85%', subtitleErr: 'Battery too low', modal: 'modal-battery' },
-  { id: 'network', title: 'Network', subtitleOk: 'Network is good', subtitleErr: 'Connection failed', modal: 'modal-network' },
-  { id: 'storage', title: 'Storage Space', subtitleOk: '45GB remaining', subtitleErr: 'Insufficient space', modal: 'modal-storage' },
+  { id: 'gps', icon: '📍', title: 'GPS Positioning', modal: 'modal-location' },
+  { id: 'bluetooth', icon: '📶', title: 'Bluetooth', modal: 'modal-bluetooth' },
+  { id: 'network', icon: '📡', title: 'Network', modal: 'modal-network' },
+  { id: 'storage', icon: '💾', title: 'Storage Space', modal: 'modal-storage' },
 ];
 
 function seg(id, name, address, start, end, opts = {}) {
@@ -92,13 +85,13 @@ const state = {
   recSeconds: 0,
   recInterval: null,
   skipSafety: false,
-  deviceChecks: { gps: true, battery: true, network: true, storage: true },
+  deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
   preconditions: { bluetooth: true, network: true },
   polylines: {},
   progressPolylines: {},
   undoTaskId: null,
   mapTasks: [
-    seg('task_vermont_001', 'Sorrento Valley', '900 Exposition Blvd, Los Angeles, CA', { lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }),
+    seg('task_vermont_001', 'S Vermont Ave', '1200 S Vermont Ave, Los Angeles, CA', { lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }),
     seg('task_high_002', 'Sunset Blvd', 'Sunset Blvd, Los Angeles, CA', { lat: 34.098, lng: -118.326 }, { lat: 34.1, lng: -118.32 }, { display_state: 'claimed', claimed_by_me: true, priority: 'high' }),
     seg('task_wilshire_003', 'Wilshire Blvd', '3400 Wilshire Blvd, Los Angeles, CA', { lat: 34.0615, lng: -118.308 }, { lat: 34.063, lng: -118.3 }),
     seg('task_fig_004', 'Figueroa St', '2200 Figueroa St, Los Angeles, CA', { lat: 34.038, lng: -118.278 }, { lat: 34.041, lng: -118.272 }, { display_state: 'claimed', claimed_by_me: true }),
@@ -118,12 +111,11 @@ const state = {
     seg('task_second_completed_022', 'Vermont Ave North', '3000 N Vermont Ave, Los Angeles, CA', { lat: 34.115, lng: -118.292 }, { lat: 34.118, lng: -118.286 }, { display_state: 'completed_local', dispatch_round: 'second' }),
   ],
   records: [
-    { task_id: 'task_done_100', title: 'S Vermont Ave Mapping', shot_at: new Date().toISOString(), duration: '10m3s', size: '50.2M', status: 'approved', group: 'today' },
-    { task_id: 'task_pending_103', title: 'Wilshire Blvd Mapping', shot_at: new Date(Date.now() - 5400000).toISOString(), duration: '7m20s', size: '38.5M', status: 'pending', group: 'today' },
-    { task_id: 'task_upload_101', title: 'S Vermont Ave Mapping', shot_at: new Date(Date.now() - 3600000).toISOString(), duration: '8m12s', size: '42.1M', status: 'uploading', group: 'today' },
-    { task_id: 'task_review_102', title: 'Hollywood Blvd Mapping', shot_at: new Date(Date.now() - 86400000).toISOString(), duration: '9m45s', size: '48.0M', status: 'rejected', group: 'yesterday' },
-    { task_id: 'task_yday_upload', title: 'S Vermont Ave Mapping', shot_at: new Date(Date.now() - 90000000).toISOString(), duration: '8m12s', size: '42.1M', status: 'uploading', group: 'yesterday' },
-    { task_id: 'task_claimed_104', title: 'Figueroa St Mapping', shot_at: new Date(Date.now() - 86400000).toISOString(), duration: '—', size: '—', status: 'claimed', group: 'yesterday' },
+    { task_id: 'task_done_100', title: 'Sorrento Valley', shot_at: new Date().toISOString(), duration: '10m3s', size: '50.2M', status: 'approved', sector: 'Sector 4-B' },
+    { task_id: 'task_review_102', title: 'Hollywood Blvd', shot_at: new Date(Date.now() - 7200000).toISOString(), duration: '9m45s', size: '48.0M', status: 'reviewing', sector: 'Sector 3-C' },
+    { task_id: 'task_pending_103', title: 'Wilshire Blvd', shot_at: new Date(Date.now() - 5400000).toISOString(), duration: '7m20s', size: '38.5M', status: 'pending', sector: 'Sector 1-A' },
+    { task_id: 'task_upload_101', title: 'S Vermont Ave', shot_at: new Date(Date.now() - 3600000).toISOString(), duration: '8m12s', size: '42.1M', status: 'uploading', sector: 'Sector 2-A' },
+    { task_id: 'task_claimed_104', title: 'Figueroa St', shot_at: new Date(Date.now() - 86400000).toISOString(), duration: '—', size: '—', status: 'claimed', sector: 'Sector 2-B' },
   ],
   progressTasks: [
     { task_id: 'prog_vermont', poi_name: 'S Vermont Ave', progress_status: 'approved', polyline: [{ lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }] },
@@ -168,8 +160,8 @@ function getTaskLineColor(t) {
 
 function renderTaskBadges(t) {
   const badges = [];
-  if (t.priority === 'high') badges.push('<span class="badge badge-high">HIGH</span>');
-  if (t.dispatch_round === 'second') badges.push('<span class="badge badge-second">2ND</span>');
+  if (t.priority === 'high') badges.push('<span class="badge badge-high">High priority</span>');
+  if (t.dispatch_round === 'second') badges.push('<span class="badge badge-second">2nd dispatch</span>');
   if (!badges.length) return '';
   return `<div class="badges">${badges.join('')}</div>`;
 }
@@ -205,27 +197,11 @@ function toast(msg) {
 }
 
 function computeStats() {
-  return { done: 12, todo: 150, passed: 10 };
+  const today = state.records.filter((r) => ['approved', 'uploading', 'pending', 'reviewing'].includes(r.status)).length;
+  const total = state.records.length;
+  const pending = state.records.filter((r) => ['pending', 'reviewing'].includes(r.status)).length;
+  return { today, total, pending };
 }
-
-function formatRecordDate(iso) {
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-const STATUS_META = {
-  approved: { label: 'Approved', tone: 'approved', corner: '✓' },
-  pending: { label: 'Pending', tone: 'pending', corner: '…' },
-  rejected: { label: 'Rejected', tone: 'rejected', corner: '×' },
-  uploading: { label: 'Uploading', tone: 'uploading', corner: '↻' },
-  reviewing: { label: 'Reviewing', tone: 'pending', corner: '…' },
-  claimed: { label: 'Claimed', tone: 'pending', corner: '…' },
-};
 
 function settlementSummary() {
   const c = { reviewing: 0, approved: 0, rejected: 0, completed: 0, collected: 0 };
@@ -284,12 +260,9 @@ const App = {
     document.getElementById('check-list').innerHTML = DEVICE_CHECKS.map((c) => {
       const ok = state.deviceChecks[c.id];
       return `<div class="check-item ${ok ? 'ok' : 'err'}" onclick="App.openCheckModal('${c.id}')">
-        <div class="check-icon">${CHECK_ICONS[c.id]}</div>
-        <div class="check-copy">
-          <div class="check-title">${c.title}</div>
-          <div class="check-sub">${ok ? c.subtitleOk : c.subtitleErr}</div>
-        </div>
-        <div class="check-badge">${ok ? '<span class="check-mark">✓</span> Satisfied' : 'Fix'}</div>
+        <div class="check-icon">${c.icon}</div>
+        <div class="check-title">${c.title}</div>
+        <div class="check-badge">${ok ? '✓ Normal' : '✕ Abnormal'}</div>
       </div>`;
     }).join('');
 
@@ -311,6 +284,7 @@ const App = {
 
   fixCheck(id) {
     state.deviceChecks[id] = true;
+    if (id === 'bluetooth') state.preconditions.bluetooth = true;
     if (id === 'network') state.preconditions.network = true;
     DEVICE_CHECKS.forEach((c) => {
       if (c.id === id) document.getElementById(c.modal).classList.remove('show');
@@ -318,19 +292,21 @@ const App = {
     App.renderPrecheck();
     App.renderPrecondition();
     toast('Status updated');
-  },
-
-  enterHome() {
-    if (!allDeviceChecksOk()) return;
-    App.go('map');
+    if (state.screen === 'precheck' && allDeviceChecksOk()) {
+      setTimeout(() => App.go('map'), 400);
+    }
   },
 
   startCheck() {
-    App.enterHome();
+    if (!allDeviceChecksOk()) return;
+    document.getElementById('modal-bluetooth').classList.add('show');
   },
 
   closeModal(id) {
     document.getElementById(id).classList.remove('show');
+    if (id === 'modal-bluetooth' && state.screen === 'precheck' && allDeviceChecksOk()) {
+      setTimeout(() => App.go('map'), 350);
+    }
   },
 
   updateMapChrome() {
@@ -476,14 +452,6 @@ const App = {
     App.updateMapChrome();
   },
 
-  closeTaskSheet() {
-    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) return;
-    state.selectedTaskId = null;
-    App.renderMapTasks();
-    App.renderTaskSheet();
-    App.updateMapChrome();
-  },
-
   renderTaskSheet() {
     const sheet = document.getElementById('task-sheet');
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
@@ -494,40 +462,40 @@ const App = {
 
     const claimed = t.display_state === 'claimed' && t.claimed_by_me;
     const completed = t.display_state === 'completed_local';
-    const badges = renderTaskBadges(t);
-    const distKm = (t.distance_from_user_km * 1.25).toFixed(1);
 
-    let actionBtn = '';
+    let title = 'Remote Driving';
+    let desc = 'Accept this road test route and drive the full segment to capture video.';
+    let btn = '';
+
     if (state.mapMode === 'review' || completed) {
-      actionBtn = `<button class="btn btn-review sheet-cta" disabled>Completed</button>`;
+      title = 'Remote Piloting';
+      desc = 'Your capture has been submitted and is waiting for review.';
+      btn = `<button class="btn btn-review" disabled>Completed — Send for Review</button>`;
     } else if (claimed) {
-      actionBtn = `<button class="btn btn-success sheet-cta" onclick="App.openBegin()">Begin</button>`;
+      title = 'Remote Piloting';
+      desc = `Route ready · ${t.distance_km} km · Navigate to the start point, then begin capture.`;
+      btn = `<button class="btn btn-success" onclick="App.openBegin()">Begin</button>`;
     } else {
-      actionBtn = `<button class="btn btn-primary sheet-cta" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
+      btn = `<button class="btn btn-primary" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
-
-    const previewRow = claimed && state.mapMode === 'idle'
-      ? `<div class="sheet-preview-row"><button type="button" class="preview-btn" onclick="toast('Opening preview…')"><span>👁</span>Preview</button></div>`
-      : '';
 
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
-      <div class="sheet-head">
-        ${badges || '<span></span>'}
-        <button type="button" class="sheet-close" onclick="App.closeTaskSheet()">×</button>
+      <div class="sheet-accent" style="background:${getTaskLineColor(t)}"></div>
+      ${renderTaskBadges(t)}
+      <div class="sheet-title">${title}</div>
+      <div class="sheet-desc">${desc}</div>
+      <div class="sheet-route">${t.poi_name}</div>
+      <p class="address">${t.poi_address}</p>
+      <div class="metrics">
+        <div class="metric"><strong>${t.distance_km}</strong><span>KM route</span></div>
+        <div class="metric"><strong>${t.distance_from_user_km}</strong><span>KM to you</span></div>
       </div>
-      <h2 class="sheet-poi">${t.poi_name}</h2>
-      <p class="sheet-meta">${distKm} kilometers away from you | ${t.poi_address}</p>
-      <div class="sheet-route-bar">
-        <span class="route-pin" aria-hidden="true">📍</span>
-        <div class="route-dash"><span>${t.distance_km}km</span></div>
-        <div class="route-actions">
-          <button type="button" class="route-action" onclick="toast('Opening Google Maps…')" aria-label="Navigate">↗</button>
-          <button type="button" class="route-action" onclick="toast('Task ID copied')" aria-label="Copy task ID">⎘</button>
-        </div>
+      <div class="chips">
+        <button class="chip" onclick="toast('Opening Google Maps…')">↗ Navigate</button>
+        <button class="chip" onclick="toast('Task ID copied')">⎘ Task ID</button>
       </div>
-      ${previewRow}
-      ${actionBtn}
+      ${btn}
     `;
   },
 
@@ -746,51 +714,56 @@ const App = {
   renderTaskList() {
     const stats = computeStats();
     document.getElementById('tasks-summary').innerHTML = `
-      <div class="summary-card">
-        <div class="summary-item blue"><strong>${stats.done}</strong><span>DONE</span></div>
-        <div class="summary-divider"></div>
-        <div class="summary-item"><strong>${stats.todo}</strong><span>TO DO</span></div>
-        <div class="summary-divider"></div>
-        <div class="summary-item red"><strong>${stats.passed}</strong><span>PASSED</span></div>
-      </div>`;
+      <div class="summary-item blue"><strong>${stats.today}</strong><span>Today</span></div>
+      <div class="summary-item"><strong>${stats.total}</strong><span>Total</span></div>
+      <div class="summary-item red"><strong>${stats.pending}</strong><span>Pending</span></div>`;
 
-    document.getElementById('task-filters').innerHTML = `
-      <button class="filter-pill dark" type="button">Date ▾</button>
-      <button class="filter-pill" type="button">Status ▾</button>`;
-
-    const groups = [
-      { label: 'Today', key: 'today' },
-      { label: 'Yesterday', key: 'yesterday' },
+    const filters = [
+      { id: 'all', label: 'All' },
+      { id: 'approved', label: 'Approved' },
+      { id: 'reviewing', label: 'Reviewing' },
+      { id: 'pending', label: 'Pending' },
+      { id: 'claimed', label: 'Claimed' },
     ];
+    document.getElementById('task-filters').innerHTML = filters
+      .map(
+        (f) =>
+          `<button class="filter-tab ${state.taskFilter === f.id ? 'on' : ''}" onclick="App.setTaskFilter('${f.id}')">${f.label}</button>`
+      )
+      .join('');
 
-    document.getElementById('task-list').innerHTML = groups
-      .map((group) => {
-        const items = state.records.filter((r) => r.group === group.key);
-        if (!items.length) return '';
-        return `<div class="task-group">
-          <h3 class="task-group-title">${group.label}</h3>
-          ${items.map((r) => App.renderTaskCard(r)).join('')}
+    const tones = {
+      approved: ['#D1FAE5', '#047857'],
+      reviewing: ['#EDE9FE', '#7C3AED'],
+      pending: ['#FEF3C7', '#B45309'],
+      uploading: ['#FEF3C7', '#B45309'],
+      claimed: ['#FEF3C7', '#B45309'],
+      rejected: ['#FEE2E2', '#EF4444'],
+    };
+
+    const filtered =
+      state.taskFilter === 'all'
+        ? state.records
+        : state.records.filter((r) => r.status === state.taskFilter);
+
+    document.getElementById('task-list').innerHTML = filtered
+      .map((r) => {
+        const [bg, fg] = tones[r.status] || ['#F1F5F9', '#64748B'];
+        const time = new Date(r.shot_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `<div class="task-card" onclick="App.onTaskCardClick('${r.task_id}','${r.status}')">
+          <div class="thumb"></div>
+          <div class="task-body">
+            <div class="task-head">
+              <h4>${r.title}</h4>
+              <span class="status-badge" style="background:${bg};color:${fg}">${r.status}</span>
+            </div>
+            <div class="task-meta">${time} · ${r.duration} · ${r.size}</div>
+            <div class="task-meta">${r.sector}</div>
+          </div>
+          <button class="menu-btn" onclick="event.stopPropagation();App.openCardMenu(event,'${r.task_id}','${r.status}')">⋯</button>
         </div>`;
       })
       .join('');
-  },
-
-  renderTaskCard(r) {
-    const meta = STATUS_META[r.status] || STATUS_META.pending;
-    const thumbClass = `task-thumb tone-${meta.tone}`;
-    return `<div class="task-card-v2" onclick="App.onTaskCardClick('${r.task_id}','${r.status}')">
-      <div class="${thumbClass}">
-        <span class="thumb-overlay">${r.duration} | ${r.size}</span>
-        <span class="thumb-corner ${meta.tone}">${meta.corner}</span>
-      </div>
-      <div class="task-card-body">
-        <div class="task-card-head">
-          <h4>${r.title}</h4>
-          <span class="status-pill ${meta.tone}">${meta.label}</span>
-        </div>
-        <div class="task-card-time">${formatRecordDate(r.shot_at)}</div>
-      </div>
-    </div>`;
   },
 
   setTaskFilter(id) {
@@ -890,7 +863,7 @@ window.App = App;
 App.renderPrecheck();
 
 if (new URLSearchParams(location.search).get('demo') === 'map') {
-  state.deviceChecks = { gps: true, battery: true, network: true, storage: true };
+  state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
   state.preconditions = { bluetooth: true, network: true };
   App.go('map');
 }
