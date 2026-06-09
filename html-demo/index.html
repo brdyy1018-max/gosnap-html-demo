@@ -10,7 +10,11 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="styles.css?v=20260609b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css?v=20260609g" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -29,17 +33,7 @@
           </div>
           <div class="login-brand">
             <div class="login-app-icon" aria-hidden="true">
-              <svg viewBox="0 0 88 88" fill="none">
-                <rect width="88" height="88" rx="22" fill="#fff"/>
-                <rect x="6" y="6" width="76" height="76" rx="18" fill="#E8F5E9"/>
-                <path d="M6 52H82M28 6V82M58 6V82M6 28H82M6 58H82" stroke="#C8E6C9" stroke-width="2"/>
-                <path d="M10 68C22 58 34 62 44 52C54 42 66 46 78 36" stroke="#A5D6A7" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="44" cy="44" r="20" fill="#111827"/>
-                <circle cx="44" cy="44" r="14" fill="#374151"/>
-                <circle cx="38" cy="38" r="5" fill="rgba(255,255,255,0.35)"/>
-                <path d="M34 58C34 52.5 38.5 48 44 48C49.5 48 54 52.5 54 58C54 64 44 72 44 72C44 72 34 64 34 58Z" fill="#EF4444"/>
-                <circle cx="44" cy="58" r="4" fill="#fff"/>
-              </svg>
+              <img src="assets/app-icon.png?v=4" alt="" width="108" height="108" />
             </div>
             <div class="login-tagline">
               <span class="login-tagline-icon" aria-hidden="true">✦</span>
@@ -50,7 +44,7 @@
         <div class="login-card" id="login-form">
           <div class="login-field">
             <label for="login-region">Region Selection</label>
-            <div class="login-input-wrap" id="login-region-wrap">
+            <div class="login-input-wrap is-empty" id="login-region-wrap">
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>
               </span>
@@ -66,7 +60,7 @@
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               </span>
-              <input id="login-user" placeholder="User ID" autocomplete="username" oninput="App.clearLoginError()" />
+              <input id="login-user" placeholder="User Wang" autocomplete="username" oninput="this.dataset.edited='1'; App.clearLoginError()" />
             </div>
           </div>
           <div class="login-field">
@@ -426,6 +420,6 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260609b"></script>
+    <script src="app.js?v=20260609e"></script>
   </body>
 </html>

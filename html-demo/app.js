@@ -273,7 +273,10 @@ const App = {
     }
 
     const account = DEMO_ACCOUNTS.find(
-      (a) => a.region === region && a.userId === userId && a.password === password
+      (a) =>
+        a.region === region &&
+        (a.userId === userId || a.displayName === userId) &&
+        a.password === password
     );
 
     if (!account) {
@@ -300,6 +303,7 @@ const App = {
       opt.textContent = code;
       select.appendChild(opt);
     });
+    select.value = 'US';
     App.onRegionChange();
   },
 
@@ -315,25 +319,16 @@ const App = {
     const region = document.getElementById('login-region').value;
     const wrap = document.getElementById('login-region-wrap');
     const check = document.getElementById('region-check');
-    const valid = LOGIN_REGIONS.includes(region);
+    const valid = !!region;
+    wrap.classList.toggle('is-empty', !region);
     wrap.classList.toggle('is-valid', valid);
     check.classList.toggle('hidden', !valid);
+    const account = DEMO_ACCOUNTS.find((a) => a.region === region);
+    const userInput = document.getElementById('login-user');
+    if (account && userInput && !userInput.dataset.edited) {
+      userInput.value = account.displayName;
+    }
     App.clearLoginError();
-  },
-
-  showLoginError(msg) {
-    const el = document.getElementById('login-error');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-    document.getElementById('login-form').classList.add('has-error');
-  },
-
-  clearLoginError() {
-    document.getElementById('login-error').classList.add('hidden');
-    document.getElementById('login-form').classList.remove('has-error');
-    document.getElementById('login-region-wrap').classList.remove('is-error');
-    document.getElementById('login-user-wrap').classList.remove('is-error');
-    document.getElementById('login-pass-wrap').classList.remove('is-error');
   },
 
   onPassInput() {
@@ -353,6 +348,21 @@ const App = {
     document.getElementById('login-clear').classList.add('hidden');
     input.focus();
     App.clearLoginError();
+  },
+
+  showLoginError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    document.getElementById('login-form').classList.add('has-error');
+  },
+
+  clearLoginError() {
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('login-form').classList.remove('has-error');
+    document.getElementById('login-region-wrap').classList.remove('is-error');
+    document.getElementById('login-user-wrap').classList.remove('is-error');
+    document.getElementById('login-pass-wrap').classList.remove('is-error');
   },
 
   toggleLoginPass() {

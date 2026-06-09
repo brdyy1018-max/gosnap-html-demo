@@ -25,7 +25,7 @@
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background: #0c1222;
   color: var(--text);
 }
@@ -108,8 +108,8 @@ body {
 
 .login-hero {
   position: relative;
-  background: linear-gradient(180deg, #2b6cff 0%, #1a56db 45%, #1648c4 100%);
-  padding: 10px 24px 72px;
+  background: linear-gradient(180deg, #3d84ff 0%, #2b72ff 32%, #1a66ff 58%, #eef4ff 100%);
+  padding: 12px 20px 96px;
   text-align: center;
   overflow: hidden;
   flex-shrink: 0;
@@ -119,18 +119,18 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-  background-size: 28px 28px;
+    linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 34px 34px;
   pointer-events: none;
 }
 
 .login-dots {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.45) 1px, transparent 1px);
-  background-size: 36px 36px;
-  opacity: 0.35;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.65) 1.2px, transparent 1.2px);
+  background-size: 44px 44px;
+  opacity: 0.22;
   pointer-events: none;
 }
 
@@ -144,7 +144,7 @@ body {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.2px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .login-status-icons {
@@ -156,35 +156,40 @@ body {
 .login-brand {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .login-app-icon {
-  width: 88px;
-  height: 88px;
-  margin: 0 auto 18px;
-  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.18));
+  width: 108px;
+  height: 108px;
+  margin: 0 0 18px;
+  flex-shrink: 0;
 }
 
-.login-app-icon svg {
-  width: 100%;
-  height: 100%;
+.login-app-icon img {
+  width: 108px;
+  height: 108px;
   display: block;
+  border-radius: 24px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
 }
 
 .login-tagline {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 9px 18px;
   border-radius: 999px;
-  background: rgba(21, 93, 252, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(26, 102, 255, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.3px;
   text-transform: uppercase;
-  box-shadow: 0 4px 14px rgba(21, 93, 252, 0.35);
+  backdrop-filter: blur(6px);
 }
 
 .login-tagline-icon {
@@ -195,10 +200,10 @@ body {
 .login-card {
   flex: 1;
   background: #fff;
-  border-radius: 28px 28px 0 0;
+  border-radius: 32px 32px 0 0;
   padding: 28px 24px 24px;
-  margin-top: -36px;
-  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.08);
+  margin-top: -56px;
+  box-shadow: 0 -6px 28px rgba(15, 23, 42, 0.07);
   position: relative;
   z-index: 2;
   display: flex;
@@ -206,15 +211,16 @@ body {
 }
 
 .login-field {
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .login-field label {
   display: block;
   font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
+  font-weight: 600;
+  color: #1f2937;
   margin-bottom: 10px;
+  letter-spacing: -0.1px;
 }
 
 .login-input-wrap {
@@ -226,13 +232,16 @@ body {
 .login-input-icon {
   position: absolute;
   left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 20px;
   height: 20px;
-  color: #cbd5e1;
+  color: #d1d5db;
   pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
 }
 
 .login-input-icon svg {
@@ -243,36 +252,38 @@ body {
 .login-input-wrap input,
 .login-input-wrap select {
   width: 100%;
-  padding: 15px 44px 15px 44px;
+  height: 52px;
+  padding: 0 44px 0 44px;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: #fff;
+  font-family: inherit;
   font-size: 16px;
-  color: var(--text);
+  color: #111827;
   appearance: none;
   -webkit-appearance: none;
 }
 
 .login-input-wrap select {
   cursor: pointer;
-  padding-right: 52px;
+}
+
+.login-input-wrap.is-empty select {
+  color: #d1d5db;
 }
 
 .login-input-wrap.is-valid select {
   padding-right: 72px;
+  color: #111827;
 }
 
 .login-input-wrap input::placeholder {
-  color: #cbd5e1;
-}
-
-.login-input-wrap.is-focused {
-  border-radius: 14px;
-  box-shadow: 0 0 0 2px rgba(21, 93, 252, 0.18);
+  color: #d1d5db;
 }
 
 .login-input-wrap.is-focused input {
-  border-color: var(--primary);
+  border-color: #1a66ff;
+  box-shadow: 0 0 0 1px #1a66ff;
 }
 
 .login-input-wrap.is-error input,
@@ -283,10 +294,12 @@ body {
 .login-valid {
   position: absolute;
   right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--success);
+  background: #16a34a;
   color: #fff;
   font-size: 13px;
   font-weight: 800;
@@ -299,12 +312,14 @@ body {
 .login-clear {
   position: absolute;
   right: 44px;
-  width: 28px;
-  height: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
   border: none;
-  border-radius: 14px;
-  background: #f1f5f9;
-  color: #64748b;
+  border-radius: 12px;
+  background: transparent;
+  color: #9ca3af;
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -321,18 +336,20 @@ body {
 }
 
 #login-pass-wrap input {
-  padding-right: 80px;
+  padding-right: 84px;
 }
 
 .login-eye {
   position: absolute;
-  right: 10px;
-  width: 36px;
-  height: 36px;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
   border: none;
-  border-radius: 18px;
+  border-radius: 16px;
   background: transparent;
-  color: #cbd5e1;
+  color: #d1d5db;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -346,9 +363,13 @@ body {
 
 .login-submit {
   margin-top: auto;
+  height: 52px;
   border-radius: 14px;
-  padding: 16px 20px;
+  padding: 0 20px;
   font-size: 17px;
+  font-weight: 700;
+  background: #1a66ff;
+  box-shadow: none;
 }
 
 .login-home-indicator {
