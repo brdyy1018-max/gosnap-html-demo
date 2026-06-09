@@ -251,6 +251,11 @@ const App = {
     App.go('precheck');
   },
 
+  toggleLoginPass() {
+    const input = document.getElementById('login-pass');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  },
+
   renderPrecheck() {
     document.getElementById('check-list').innerHTML = DEVICE_CHECKS.map((c) => {
       const ok = state.deviceChecks[c.id];

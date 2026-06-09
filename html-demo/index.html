@@ -10,37 +10,77 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="styles.css?v=20260527c" />
+    <link rel="stylesheet" href="styles.css?v=20260527d" />
   </head>
   <body>
     <div class="phone" id="app">
       <!-- LOGIN -->
       <div class="screen login-screen active" id="screen-login">
-        <div class="login-gradient">
-          <div class="login-logo-ring">
-            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-              <circle cx="24" cy="24" r="24" fill="rgba(255,255,255,0.18)" />
-              <path d="M24 10c-4.5 0-8 3.2-8 7.2 0 3.1 2 5.8 4.8 6.8L24 38l3.2-14c2.8-1 4.8-3.7 4.8-6.8C32 13.2 28.5 10 24 10z" fill="#fff"/>
-            </svg>
+        <div class="login-hero">
+          <div class="login-grid" aria-hidden="true"></div>
+          <div class="login-dots" aria-hidden="true"></div>
+          <div class="login-status">
+            <span class="login-time">9:41</span>
+            <span class="login-status-icons" aria-hidden="true">
+              <svg viewBox="0 0 18 12" width="18" height="12"><rect x="0" y="8" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="5" y="5" width="3" height="7" rx="0.5" fill="currentColor"/><rect x="10" y="2" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="15" y="0" width="3" height="12" rx="0.5" fill="currentColor"/></svg>
+              <svg viewBox="0 0 16 12" width="16" height="12"><path d="M8 2.5C10.8 2.5 13.2 3.6 15 5.5L16 4.5C13.9 2.2 11.1 1 8 1S2.1 2.2 0 4.5L1 5.5C2.8 3.6 5.2 2.5 8 2.5Z" fill="currentColor"/><path d="M8 6.5C9.7 6.5 11.2 7.2 12.2 8.5L13.2 7.5C11.8 5.9 10 5 8 5S4.2 5.9 2.8 7.5L3.8 8.5C4.8 7.2 6.3 6.5 8 6.5Z" fill="currentColor"/><circle cx="8" cy="10.5" r="1.5" fill="currentColor"/></svg>
+              <svg viewBox="0 0 25 12" width="25" height="12"><rect x="0.5" y="0.5" width="20" height="11" rx="2.5" stroke="currentColor" fill="none"/><rect x="22" y="4" width="2.5" height="4" rx="1" fill="currentColor"/><rect x="2" y="2" width="14" height="8" rx="1.5" fill="currentColor"/></svg>
+            </span>
           </div>
-          <h1>GoSnap</h1>
-          <p>Discover the good life</p>
+          <div class="login-brand">
+            <div class="login-app-icon" aria-hidden="true">
+              <svg viewBox="0 0 88 88" fill="none">
+                <rect width="88" height="88" rx="22" fill="#fff"/>
+                <rect x="6" y="6" width="76" height="76" rx="18" fill="#E8F5E9"/>
+                <path d="M6 52H82M28 6V82M58 6V82M6 28H82M6 58H82" stroke="#C8E6C9" stroke-width="2"/>
+                <path d="M10 68C22 58 34 62 44 52C54 42 66 46 78 36" stroke="#A5D6A7" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="44" cy="44" r="20" fill="#111827"/>
+                <circle cx="44" cy="44" r="14" fill="#374151"/>
+                <circle cx="38" cy="38" r="5" fill="rgba(255,255,255,0.35)"/>
+                <path d="M34 58C34 52.5 38.5 48 44 48C49.5 48 54 52.5 54 58C54 64 44 72 44 72C44 72 34 64 34 58Z" fill="#EF4444"/>
+                <circle cx="44" cy="58" r="4" fill="#fff"/>
+              </svg>
+            </div>
+            <div class="login-tagline">
+              <span class="login-tagline-icon" aria-hidden="true">✦</span>
+              Discover the good life
+            </div>
+          </div>
         </div>
         <div class="login-card">
-          <div class="field">
-            <label>Region</label>
-            <input id="login-region" value="US" />
+          <div class="login-field">
+            <label for="login-region">Region Selection</label>
+            <div class="login-input-wrap">
+              <span class="login-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>
+              </span>
+              <input id="login-region" placeholder="Country" value="US" autocomplete="off" />
+            </div>
           </div>
-          <div class="field">
-            <label>User ID</label>
-            <input id="login-user" value="US-156" />
+          <div class="login-field">
+            <label for="login-user">User Login</label>
+            <div class="login-input-wrap">
+              <span class="login-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </span>
+              <input id="login-user" placeholder="Name" value="US-156" autocomplete="username" />
+            </div>
           </div>
-          <div class="field">
-            <label>Password</label>
-            <input id="login-pass" type="password" value="demo" />
+          <div class="login-field">
+            <label for="login-pass">Password</label>
+            <div class="login-input-wrap">
+              <span class="login-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 118 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </span>
+              <input id="login-pass" type="password" placeholder="Password" value="demo" autocomplete="current-password" />
+              <button type="button" class="login-eye" onclick="App.toggleLoginPass()" aria-label="Toggle password visibility">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>
+              </button>
+            </div>
           </div>
-          <button class="btn btn-primary" onclick="App.login()">Sign In</button>
+          <button class="btn btn-primary login-submit" onclick="App.login()">Sign In</button>
         </div>
+        <div class="login-home-indicator" aria-hidden="true"></div>
       </div>
 
       <!-- PRE-CHECK -->
@@ -381,6 +421,6 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260527c"></script>
+    <script src="app.js?v=20260527d"></script>
   </body>
 </html>
