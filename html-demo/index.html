@@ -10,7 +10,7 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="styles.css?v=20260527d" />
+    <link rel="stylesheet" href="styles.css?v=20260609b" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -47,38 +47,43 @@
             </div>
           </div>
         </div>
-        <div class="login-card">
+        <div class="login-card" id="login-form">
           <div class="login-field">
             <label for="login-region">Region Selection</label>
-            <div class="login-input-wrap">
+            <div class="login-input-wrap" id="login-region-wrap">
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>
               </span>
-              <input id="login-region" placeholder="Country" value="US" autocomplete="off" />
+              <select id="login-region" aria-label="Region Selection" onchange="App.onRegionChange()">
+                <option value="">Country</option>
+              </select>
+              <span class="login-valid hidden" id="region-check" aria-hidden="true">✓</span>
             </div>
           </div>
           <div class="login-field">
             <label for="login-user">User Login</label>
-            <div class="login-input-wrap">
+            <div class="login-input-wrap" id="login-user-wrap">
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               </span>
-              <input id="login-user" placeholder="Name" value="US-156" autocomplete="username" />
+              <input id="login-user" placeholder="User ID" autocomplete="username" oninput="App.clearLoginError()" />
             </div>
           </div>
           <div class="login-field">
             <label for="login-pass">Password</label>
-            <div class="login-input-wrap">
+            <div class="login-input-wrap" id="login-pass-wrap">
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 118 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               </span>
-              <input id="login-pass" type="password" placeholder="Password" value="demo" autocomplete="current-password" />
+              <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" oninput="App.onPassInput()" onfocus="App.focusPass(true)" onblur="App.focusPass(false)" />
+              <button type="button" class="login-clear hidden" id="login-clear" onclick="App.clearLoginPass()" aria-label="Clear password">×</button>
               <button type="button" class="login-eye" onclick="App.toggleLoginPass()" aria-label="Toggle password visibility">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>
               </button>
             </div>
           </div>
-          <button class="btn btn-primary login-submit" onclick="App.login()">Sign In</button>
+          <p class="login-error hidden" id="login-error">Invalid region, user ID, or password.</p>
+          <button class="btn btn-primary login-submit" type="button" onclick="App.login()">Sign In</button>
         </div>
         <div class="login-home-indicator" aria-hidden="true"></div>
       </div>
@@ -249,8 +254,8 @@
           <div class="profile-hero">
             <div class="avatar lg">US</div>
             <div>
-              <strong>US-156</strong>
-              <div class="profile-id">ID · US-156-8842</div>
+              <strong class="profile-name" id="settings-user-id">US-156</strong>
+              <div class="profile-id" id="settings-profile-id">ID · US-156</div>
             </div>
           </div>
         </div>
@@ -421,6 +426,6 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260527d"></script>
+    <script src="app.js?v=20260609b"></script>
   </body>
 </html>

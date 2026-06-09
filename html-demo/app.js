@@ -47,6 +47,14 @@ const PROGRESS_LAYERS = [
 
 const SETTLEMENT_BOTTOM = ['reviewing', 'approved', 'rejected'];
 
+/** Demo credentials — region + user ID + password must all match */
+const LOGIN_REGIONS = ['US', 'UK', 'SG'];
+const DEMO_ACCOUNTS = [
+  { region: 'US', userId: 'US-156', password: 'demo123', displayName: 'User Wang' },
+  { region: 'UK', userId: 'UK-088', password: 'demo123', displayName: 'User Smith' },
+  { region: 'SG', userId: 'SG-042', password: 'demo123', displayName: 'User Tan' },
+];
+
 const DEVICE_CHECKS = [
   { id: 'gps', icon: '📍', title: 'GPS Positioning', modal: 'modal-location' },
   { id: 'bluetooth', icon: '📶', title: 'Bluetooth', modal: 'modal-bluetooth' },
@@ -90,6 +98,7 @@ const state = {
   polylines: {},
   progressPolylines: {},
   undoTaskId: null,
+  auth: null,
   mapTasks: [
     seg('task_vermont_001', 'S Vermont Ave', '1200 S Vermont Ave, Los Angeles, CA', { lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }),
     seg('task_high_002', 'Sunset Blvd', 'Sunset Blvd, Los Angeles, CA', { lat: 34.098, lng: -118.326 }, { lat: 34.1, lng: -118.32 }, { display_state: 'claimed', claimed_by_me: true, priority: 'high' }),
@@ -237,6 +246,7 @@ const App = {
       }, 100);
     }
     if (screen === 'tasks') App.renderTaskList();
+    if (screen === 'settings') App.updateSettingsProfile();
     if (screen === 'progress-map') {
       setTimeout(() => {
         if (!state.progressMap) App.initProgressMap();
@@ -248,7 +258,101 @@ const App = {
   },
 
   login() {
+    const region = document.getElementById('login-region').value;
+    const userId = document.getElementById('login-user').value.trim();
+    const password = document.getElementById('login-pass').value;
+
+    if (!region) {
+      App.showLoginError('Please select a region.');
+      document.getElementById('login-region-wrap').classList.add('is-error');
+      return;
+    }
+    if (!userId || !password) {
+      App.showLoginError('Enter your user ID and password.');
+      return;
+    }
+
+    const account = DEMO_ACCOUNTS.find(
+      (a) => a.region === region && a.userId === userId && a.password === password
+    );
+
+    if (!account) {
+      App.showLoginError('Invalid region, user ID, or password.');
+      document.getElementById('login-user-wrap').classList.add('is-error');
+      document.getElementById('login-pass-wrap').classList.add('is-error');
+      return;
+    }
+
+    state.auth = {
+      region: account.region,
+      userId: account.userId,
+      displayName: account.displayName,
+    };
+    App.clearLoginError();
     App.go('precheck');
+  },
+
+  initLoginForm() {
+    const select = document.getElementById('login-region');
+    LOGIN_REGIONS.forEach((code) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = code;
+      select.appendChild(opt);
+    });
+    App.onRegionChange();
+  },
+
+  updateSettingsProfile() {
+    if (!state.auth) return;
+    const nameEl = document.getElementById('settings-user-id');
+    const idEl = document.getElementById('settings-profile-id');
+    if (nameEl) nameEl.textContent = state.auth.userId;
+    if (idEl) idEl.textContent = `ID · ${state.auth.userId}`;
+  },
+
+  onRegionChange() {
+    const region = document.getElementById('login-region').value;
+    const wrap = document.getElementById('login-region-wrap');
+    const check = document.getElementById('region-check');
+    const valid = LOGIN_REGIONS.includes(region);
+    wrap.classList.toggle('is-valid', valid);
+    check.classList.toggle('hidden', !valid);
+    App.clearLoginError();
+  },
+
+  showLoginError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    document.getElementById('login-form').classList.add('has-error');
+  },
+
+  clearLoginError() {
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('login-form').classList.remove('has-error');
+    document.getElementById('login-region-wrap').classList.remove('is-error');
+    document.getElementById('login-user-wrap').classList.remove('is-error');
+    document.getElementById('login-pass-wrap').classList.remove('is-error');
+  },
+
+  onPassInput() {
+    const val = document.getElementById('login-pass').value;
+    document.getElementById('login-clear').classList.toggle('hidden', !val);
+    App.clearLoginError();
+  },
+
+  focusPass(focused) {
+    document.getElementById('login-pass-wrap').classList.toggle('is-focused', focused);
+  },
+
+  clearLoginPass() {
+    const input = document.getElementById('login-pass');
+    input.value = '';
+    input.type = 'password';
+    document.getElementById('login-clear').classList.add('hidden');
+    input.focus();
+    App.clearLoginError();
   },
 
   toggleLoginPass() {
@@ -598,7 +702,14 @@ const App = {
     App.closeModal('modal-logout');
     state.selectedTaskId = null;
     state.mapMode = 'idle';
+    state.auth = null;
     clearInterval(state.recInterval);
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-region').value = '';
+    App.onRegionChange();
+    App.onPassInput();
+    App.clearLoginError();
     App.go('login');
     toast('Logged out');
   },
@@ -860,6 +971,7 @@ document.addEventListener('click', (e) => {
 
 window.toast = toast;
 window.App = App;
+App.initLoginForm();
 App.renderPrecheck();
 
 if (new URLSearchParams(location.search).get('demo') === 'map') {
