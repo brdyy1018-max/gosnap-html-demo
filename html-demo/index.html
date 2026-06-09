@@ -10,7 +10,10 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="styles.css?v=20260527d" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=20260609" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -29,17 +32,7 @@
           </div>
           <div class="login-brand">
             <div class="login-app-icon" aria-hidden="true">
-              <svg viewBox="0 0 88 88" fill="none">
-                <rect width="88" height="88" rx="22" fill="#fff"/>
-                <rect x="6" y="6" width="76" height="76" rx="18" fill="#E8F5E9"/>
-                <path d="M6 52H82M28 6V82M58 6V82M6 28H82M6 58H82" stroke="#C8E6C9" stroke-width="2"/>
-                <path d="M10 68C22 58 34 62 44 52C54 42 66 46 78 36" stroke="#A5D6A7" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="44" cy="44" r="20" fill="#111827"/>
-                <circle cx="44" cy="44" r="14" fill="#374151"/>
-                <circle cx="38" cy="38" r="5" fill="rgba(255,255,255,0.35)"/>
-                <path d="M34 58C34 52.5 38.5 48 44 48C49.5 48 54 52.5 54 58C54 64 44 72 44 72C44 72 34 64 34 58Z" fill="#EF4444"/>
-                <circle cx="44" cy="58" r="4" fill="#fff"/>
-              </svg>
+              <img src="assets/app-icon.png" alt="" width="88" height="88" />
             </div>
             <div class="login-tagline">
               <span class="login-tagline-icon" aria-hidden="true">✦</span>
@@ -87,19 +80,19 @@
       <div class="screen" id="screen-precheck">
         <div class="blue-header">
           <button class="header-icon" onclick="App.go('login')">←</button>
-          <span>Pre-check</span>
+          <span>Pre-Check</span>
           <button class="header-icon" onclick="App.refreshPrecheck()">↻</button>
         </div>
         <div class="info-banner">
-          Verify GPS, Bluetooth, network, and storage before connecting your GoPro and starting
-          road test tasks.
+          Confirm device status meets collection standards before road test to ensure continuous
+          and accurate data recording.
         </div>
         <div class="scroll precheck-body">
           <div class="check-list" id="check-list"></div>
         </div>
         <div class="sticky-footer">
-          <button class="btn btn-primary" id="btn-start-check" onclick="App.startCheck()">
-            Start check
+          <button class="btn btn-primary" id="btn-start-check" onclick="App.enterHome()">
+            Confirmed, enter home page
           </button>
         </div>
       </div>
@@ -209,14 +202,12 @@
       <div class="screen" id="screen-tasks">
         <div class="back-header">
           <button class="icon-btn" onclick="App.go('map')">←</button>
-          <h2>Tasks</h2>
+          <h2>Task List</h2>
+          <button class="icon-btn" onclick="App.renderTaskList()" aria-label="Refresh">↻</button>
         </div>
         <div class="tasks-summary" id="tasks-summary"></div>
         <div class="filter-row" id="task-filters"></div>
         <div class="scroll">
-          <div class="settlement-entry">
-            <button class="btn btn-outline" onclick="App.go('progress-map')">Settlement Map</button>
-          </div>
           <div class="task-list" id="task-list"></div>
         </div>
       </div>
@@ -245,62 +236,73 @@
       <!-- SETTINGS -->
       <div class="screen" id="screen-settings">
         <div class="settings-hero">
-          <button class="header-icon light" onclick="App.go('map')">←</button>
-          <div class="profile-hero">
-            <div class="avatar lg">US</div>
-            <div>
-              <strong>US-156</strong>
-              <div class="profile-id">ID · US-156-8842</div>
+          <div class="settings-hero-top">
+            <button class="header-icon light" onclick="App.go('map')">←</button>
+            <span>Setting</span>
+            <button class="header-icon light" onclick="toast('Refreshed')">↻</button>
+          </div>
+          <div class="profile-block">
+            <div class="profile-avatar-wrap">
+              <div class="profile-avatar"></div>
+              <button class="profile-edit" aria-label="Edit profile">✎</button>
+            </div>
+            <strong class="profile-name">US-156</strong>
+            <div class="profile-rank">Regional King</div>
+            <div class="profile-badges">
+              <span class="profile-badge blue">Star of Honor</span>
+              <span class="profile-badge orange">Star of Honor</span>
+              <span class="profile-badge green">3rd Anniversary</span>
             </div>
           </div>
         </div>
         <div class="scroll settings">
-          <div class="section-title">System configuration</div>
+          <div class="section-title">System Configuration</div>
           <div class="settings-group">
             <div class="settings-row" onclick="App.go('precheck')">
-              <span class="row-left"><span class="row-icon">📷</span>Device</span>
-              <span class="muted">GoPro HERO ›</span>
+              <span class="row-left"><span class="row-icon svg-icon device"></span>Device</span>
+              <span class="muted">›</span>
             </div>
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🌐</span>Language</span>
-              <span class="muted">English ›</span>
+              <span class="row-left"><span class="row-icon svg-icon network"></span>Network</span>
+              <span class="muted">Starbucks_WiFi ›</span>
             </div>
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🕐</span>Time zone</span>
-              <span class="muted">UTC-8 ›</span>
+              <span class="row-left"><span class="row-icon svg-icon version"></span>Version</span>
+              <span class="muted">v4.12.0-stable ›</span>
             </div>
           </div>
-          <div class="section-title">Support & feedback</div>
+          <div class="section-title">Support &amp; Feedback</div>
           <div class="settings-group">
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">❓</span>Help center</span>
+              <span class="row-left"><span class="row-icon svg-icon support"></span>Safe Support</span>
               <span class="muted">›</span>
             </div>
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">✉️</span>Contact us</span>
+              <span class="row-left"><span class="row-icon svg-icon book"></span>Knowledge Base</span>
               <span class="muted">›</span>
             </div>
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">⚠️</span>Report a problem</span>
+              <span class="row-left"><span class="row-icon svg-icon feedback"></span>Send Feedback</span>
               <span class="muted">›</span>
             </div>
-          </div>
-          <div class="section-title">Privacy & security</div>
-          <div class="settings-group">
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🔔</span>Push notifications</span>
+              <span class="row-left"><span class="row-icon svg-icon locate"></span>Auto Position</span>
               <label class="toggle"><input type="checkbox" checked /><span></span></label>
             </div>
+          </div>
+          <div class="section-title">Privacy &amp; Security</div>
+          <div class="settings-group">
             <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🔒</span>Password</span>
-              <span class="muted">›</span>
-            </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🛡️</span>Two-factor auth</span>
-              <span class="muted">Off ›</span>
+              <span class="row-left"><span class="row-icon svg-icon contact"></span>Urgent Contact</span>
+              <span class="muted">Call Up ›</span>
             </div>
           </div>
-          <button class="logout-btn" onclick="App.openLogoutModal()">Log out</button>
+          <div class="settings-group logout-group">
+            <div class="settings-row logout-row" onclick="App.openLogoutModal()">
+              <span class="row-left"><span class="row-icon svg-icon logout"></span>Log out</span>
+            </div>
+          </div>
+          <p class="settings-footer">- GoSnap Version 4.12.0 -</p>
         </div>
       </div>
     </div>
@@ -330,7 +332,7 @@
         <div class="alert-icon red">🔋</div>
         <h3>Low Battery Alert</h3>
         <p>GoPro battery is below 20%. Charge before starting a long route.</p>
-        <button class="btn btn-primary" onclick="App.closeModal('modal-battery')">I understand</button>
+        <button class="btn btn-primary" onclick="App.fixCheck('battery')">I understand</button>
       </div>
     </div>
 
@@ -421,6 +423,6 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260527d"></script>
+    <script src="app.js?v=20260609"></script>
   </body>
 </html>
