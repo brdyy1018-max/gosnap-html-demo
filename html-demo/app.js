@@ -80,10 +80,20 @@ const PRECONDITION_ROWS = [
     id: 'gps',
     title: 'GPS Positioning',
     icon: 'gps',
-    ok: 'Set to Always Allow',
+    ok: 'Location ready',
     err: 'Location Access Denied',
+    distanceErr: 'Distance to task does not meet requirements',
+  },
+  {
+    id: 'storage',
+    title: 'Storage Space',
+    icon: 'storage',
+    ok: 'Storage available',
+    err: 'Insufficient storage space',
   },
 ];
+
+const TASK_DISTANCE_MAX_KM = 1.0;
 
 function preconditionRowIcon(name) {
   const icons = {
@@ -93,8 +103,46 @@ function preconditionRowIcon(name) {
       '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>',
     gps:
       '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    storage:
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4V2h6v2M9 14h6M9 10h6" stroke-linecap="round"/></svg>',
   };
   return icons[name] || '';
+}
+
+function getSelectedMapTask() {
+  return state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+}
+
+function checkTaskDistanceOk() {
+  const t = getSelectedMapTask();
+  if (!t) return true;
+  return (t.distance_km || 0) <= TASK_DISTANCE_MAX_KM;
+}
+
+function syncGpsPrecondition() {
+  state.preconditions.gps =
+    state.preconditionGps.authorized && state.preconditionGps.distanceOk;
+}
+
+function getPreconditionSubtitle(row) {
+  if (row.id === 'gps') {
+    if (state.preconditions.gps) return row.ok;
+    if (state.preconditionGps.authorized && !state.preconditionGps.distanceOk) {
+      return row.distanceErr;
+    }
+    return row.err;
+  }
+  return state.preconditions[row.id] ? row.ok : row.err;
+}
+
+function getPreconditionAction(row) {
+  if (state.preconditions[row.id]) {
+    return '<span class="pre-card-check" aria-label="Ready"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+  }
+  if (row.id === 'gps' && state.preconditionGps.authorized && !state.preconditionGps.distanceOk) {
+    return '<button type="button" class="pre-card-action pre-card-action--refresh" onclick="App.refreshGpsDistance()">Refresh ↻</button>';
+  }
+  return `<button type="button" class="pre-card-action" onclick="App.fixPrecondition('${row.id}')">Set ›</button>`;
 }
 
 function seg(id, name, address, start, end, opts = {}) {
@@ -137,7 +185,8 @@ const state = {
   captureRestMode: false,
   skipSafety: false,
   deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
-  preconditions: { bluetooth: true, network: true, gps: true },
+  preconditionGps: { authorized: false, distanceOk: false },
+  preconditions: { bluetooth: true, network: true, gps: true, storage: true },
   mapTaskLayers: {},
   progressPolylines: {},
   routeCache: {},
@@ -245,9 +294,11 @@ const state = {
     { task_id: 'prog_sunset', poi_name: 'Sunset Blvd', progress_status: 'rejected', polyline: [{ lat: 34.098, lng: -118.326 }, { lat: 34.1, lng: -118.32 }] },
   ],
   selectedProgressId: null,
+  preconditionFixReturn: false,
   settings: {
     autoPosition: true,
     autoUpdates: true,
+    simulateFailedChecks: false,
   },
 };
 
@@ -501,6 +552,31 @@ function allDeviceChecksOk() {
 
 function allPreconditionsOk() {
   return Object.values(state.preconditions).every(Boolean);
+}
+
+function applyFailedChecks() {
+  state.deviceChecks = { gps: false, bluetooth: false, network: false, storage: false };
+  state.preconditionGps = { authorized: false, distanceOk: false };
+  state.preconditions = { bluetooth: false, network: false, gps: false, storage: false };
+}
+
+function applyReadyChecks() {
+  state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
+  state.preconditionGps = { authorized: true, distanceOk: true };
+  state.preconditions = { bluetooth: true, network: true, gps: true, storage: true };
+}
+
+function syncPreconditionsFromDevice() {
+  state.preconditions.bluetooth = state.deviceChecks.bluetooth;
+  state.preconditions.network = state.deviceChecks.network;
+  state.preconditions.storage = state.deviceChecks.storage;
+  if (state.deviceChecks.gps) {
+    state.preconditionGps.authorized = true;
+    state.preconditionGps.distanceOk = checkTaskDistanceOk();
+  } else {
+    state.preconditionGps = { authorized: false, distanceOk: false };
+  }
+  syncGpsPrecondition();
 }
 
 function formatTime(sec) {
@@ -791,8 +867,10 @@ const App = {
   syncSettingsToggles() {
     const autoPos = document.getElementById('toggle-auto-position');
     const autoUpd = document.getElementById('toggle-auto-updates');
+    const simulateFail = document.getElementById('toggle-simulate-failed-checks');
     if (autoPos) autoPos.checked = state.settings.autoPosition;
     if (autoUpd) autoUpd.checked = state.settings.autoUpdates;
+    if (simulateFail) simulateFail.checked = state.settings.simulateFailedChecks;
   },
 
   onAutoPositionToggle(on) {
@@ -803,6 +881,18 @@ const App = {
   onAutoUpdatesToggle(on) {
     state.settings.autoUpdates = on;
     toast(on ? 'Auto Updates enabled' : 'Auto Updates disabled');
+  },
+
+  onSimulateFailedChecksToggle(on) {
+    state.settings.simulateFailedChecks = on;
+    if (on) {
+      applyFailedChecks();
+      toast('Precondition failures simulated');
+    } else {
+      applyReadyChecks();
+      toast('All preconditions ready');
+    }
+    if (state.screen === 'map') App.updateMapChrome();
   },
 
   refreshSettings() {
@@ -877,7 +967,8 @@ const App = {
     state.precheckStep = 'location';
     state.selectedGopro = 'GoPro_1';
     state.deviceChecks = { gps: false, bluetooth: false, network: true, storage: true };
-    state.preconditions = { bluetooth: false, network: true, gps: false };
+    state.preconditions = { bluetooth: false, network: true, gps: false, storage: true };
+    state.preconditionGps = { authorized: false, distanceOk: false };
     document.querySelectorAll('#gopro-list .gopro-option').forEach((el, i) => {
       el.classList.toggle('selected', i === 0);
       const input = el.querySelector('input');
@@ -913,7 +1004,8 @@ const App = {
 
   precheckLocationAllow() {
     state.deviceChecks.gps = true;
-    state.preconditions.gps = true;
+    state.preconditionGps = { authorized: true, distanceOk: true };
+    syncGpsPrecondition();
     App.showPrecheckStep('bluetooth');
   },
 
@@ -949,7 +1041,8 @@ const App = {
 
   precheckGoproOk() {
     state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
-    state.preconditions = { bluetooth: true, network: true, gps: true };
+    state.preconditionGps = { authorized: true, distanceOk: true };
+    state.preconditions = { bluetooth: true, network: true, gps: true, storage: true };
     toast(`Connected to ${state.selectedGopro}`);
     App.go('map');
   },
@@ -976,12 +1069,88 @@ const App = {
     state.deviceChecks[id] = true;
     if (id === 'bluetooth') state.preconditions.bluetooth = true;
     if (id === 'network') state.preconditions.network = true;
-    if (id === 'gps') state.preconditions.gps = true;
+    if (id === 'storage') state.preconditions.storage = true;
     DEVICE_CHECKS.forEach((c) => {
       if (c.id === id) document.getElementById(c.modal).classList.remove('show');
     });
     App.renderPrecondition();
+    App.updateMapChrome();
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
     toast('Status updated');
+  },
+
+  confirmGpsAuth(mode) {
+    App.closeModal('modal-gps-auth');
+    if (mode === 'deny') {
+      state.preconditionGps = { authorized: false, distanceOk: false };
+      state.deviceChecks.gps = false;
+    } else {
+      state.preconditionGps.authorized = true;
+      state.deviceChecks.gps = true;
+      state.preconditionGps.distanceOk = state.settings.simulateFailedChecks
+        ? false
+        : checkTaskDistanceOk();
+    }
+    syncGpsPrecondition();
+    App.renderPrecondition();
+    App.updateMapChrome();
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
+  },
+
+  refreshGpsDistance() {
+    if (!state.preconditionGps.authorized) return;
+    toast('Checking location…');
+    setTimeout(() => {
+      if (state.settings.simulateFailedChecks) {
+        state.preconditionGps.distanceOk = true;
+      } else {
+        state.preconditionGps.distanceOk = checkTaskDistanceOk();
+        if (!state.preconditionGps.distanceOk) {
+          toast('Still too far from task start');
+          return;
+        }
+      }
+      syncGpsPrecondition();
+      App.renderPrecondition();
+      App.updateMapChrome();
+      toastSuccess('Location meets task requirements');
+    }, 700);
+  },
+
+  openStorageSettings() {
+    App.closeModal('modal-ios-storage');
+    document.getElementById('modal-precondition').classList.remove('show');
+    document.getElementById('modal-storage-settings').classList.add('show');
+  },
+
+  returnFromStorageAlert() {
+    App.closeModal('modal-ios-storage');
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
+  },
+
+  closeStorageSettings() {
+    document.getElementById('modal-storage-settings').classList.remove('show');
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
+  },
+
+  confirmStorageFix() {
+    state.deviceChecks.storage = true;
+    state.preconditions.storage = true;
+    document.getElementById('modal-storage-settings').classList.remove('show');
+    App.renderPrecondition();
+    App.updateMapChrome();
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
+    toastSuccess('Storage updated');
   },
 
   startCheck() {
@@ -990,6 +1159,7 @@ const App = {
 
   closeModal(id) {
     document.getElementById(id).classList.remove('show');
+    if (id === 'modal-precondition') state.preconditionFixReturn = false;
   },
 
   toggleStatusBar() {
@@ -1317,24 +1487,24 @@ const App = {
   },
 
   openPrecondition() {
-    state.preconditions.bluetooth = state.deviceChecks.bluetooth;
-    state.preconditions.network = state.deviceChecks.network;
-    state.preconditions.gps = state.deviceChecks.gps;
+    if (state.settings.simulateFailedChecks) {
+      applyFailedChecks();
+    } else {
+      syncPreconditionsFromDevice();
+    }
     App.renderPrecondition();
+    App.updateMapChrome();
     document.getElementById('modal-precondition').classList.add('show');
   },
 
   renderPrecondition() {
     document.getElementById('precondition-rows').innerHTML = PRECONDITION_ROWS.map((row) => {
       const ok = state.preconditions[row.id];
-      const action = ok
-        ? '<span class="pre-card-check" aria-label="Ready"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
-        : `<button type="button" class="pre-card-action" onclick="App.fixPrecondition('${row.id}')">Set ›</button>`;
       return (
         `<div class="pre-card ${ok ? 'is-ok' : 'is-err'}">` +
         `<span class="pre-card-icon">${preconditionRowIcon(row.icon)}</span>` +
-        `<div class="pre-card-body"><strong>${row.title}</strong><span class="pre-card-sub">${ok ? row.ok : row.err}</span></div>` +
-        action +
+        `<div class="pre-card-body"><strong>${row.title}</strong><span class="pre-card-sub">${getPreconditionSubtitle(row)}</span></div>` +
+        getPreconditionAction(row) +
         `</div>`
       );
     }).join('');
@@ -1349,14 +1519,19 @@ const App = {
     const modals = {
       bluetooth: 'modal-bluetooth',
       network: 'modal-network',
-      gps: 'modal-location',
+      gps: 'modal-gps-auth',
+      storage: 'modal-ios-storage',
     };
-    const modal = modals[id];
-    if (modal) document.getElementById(modal).classList.add('show');
+    const modalId = modals[id];
+    if (!modalId) return;
+    state.preconditionFixReturn = true;
+    document.getElementById('modal-precondition').classList.remove('show');
+    document.getElementById(modalId).classList.add('show');
   },
 
   preconditionGo() {
     if (!allPreconditionsOk()) return;
+    state.preconditionFixReturn = false;
     App.closeModal('modal-precondition');
     state.mapMode = 'navigating';
     state.recSeconds = 0;
@@ -1844,8 +2019,12 @@ window.toast = toast;
 window.App = App;
 App.initLoginForm();
 
-if (new URLSearchParams(location.search).get('demo') === 'map') {
-  state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
-  state.preconditions = { bluetooth: true, network: true, gps: true };
+const bootParams = new URLSearchParams(location.search);
+if (bootParams.get('checks') === 'fail' || bootParams.get('fail') === '1') {
+  state.settings.simulateFailedChecks = true;
+  applyFailedChecks();
+}
+if (bootParams.get('demo') === 'map') {
+  if (!state.settings.simulateFailedChecks) applyReadyChecks();
   App.go('map');
 }

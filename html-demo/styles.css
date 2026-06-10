@@ -3021,6 +3021,172 @@ body {
 
 .overlay.show { display: flex; }
 
+#modal-precondition.show {
+  z-index: 1000;
+}
+
+#modal-location.show,
+#modal-gps-auth.show,
+#modal-ios-storage.show,
+#modal-bluetooth.show,
+#modal-network.show,
+#modal-storage.show,
+#modal-storage-settings.show {
+  z-index: 1050;
+}
+
+.overlay-center {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.ios-dialog-wrap {
+  width: min(320px, calc(100% - 48px));
+}
+
+.ios-storage-sheet {
+  padding: 0 0 calc(20px + env(safe-area-inset-bottom, 0px));
+  background: #f2f2f7;
+}
+
+.ios-settings-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f2f2f7;
+  border-bottom: 1px solid rgba(60, 60, 67, 0.12);
+}
+
+.ios-settings-nav strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ios-settings-nav-btn {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: #007aff;
+  cursor: pointer;
+  padding: 0;
+  justify-self: start;
+}
+
+.ios-settings-nav-btn--primary {
+  font-weight: 600;
+  justify-self: end;
+}
+
+.ios-storage-summary {
+  padding: 16px;
+  background: #fff;
+  margin: 16px 16px 10px;
+  border-radius: 12px;
+}
+
+.ios-storage-meter {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.ios-storage-seg { display: block; height: 100%; }
+.ios-storage-seg--apps { width: 34%; background: #007aff; }
+.ios-storage-seg--photos { width: 28%; background: #34c759; }
+.ios-storage-seg--system { width: 10%; background: #ff9500; }
+.ios-storage-seg--free { flex: 1; background: #e5e7eb; }
+
+.ios-storage-caption {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ios-storage-list {
+  margin: 0 16px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ios-storage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.ios-storage-row:last-child { border-bottom: none; }
+
+.ios-storage-row.muted { opacity: 0.55; }
+
+.ios-storage-app-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a66ff, #4d8dff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ios-storage-app-icon--muted {
+  background: #d1d5db;
+  color: #fff;
+}
+
+.ios-storage-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ios-storage-row-body strong {
+  display: block;
+  font-size: 15px;
+  color: #111827;
+}
+
+.ios-storage-row-body span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ios-storage-offload {
+  border: none;
+  background: #eef4ff;
+  color: #1a66ff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.ios-storage-hint {
+  margin: 12px 16px 0;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.pre-card-action--refresh {
+  color: #1a66ff;
+  background: #eef4ff;
+}
+
 .overlay-sheet {
   align-items: flex-end;
   padding: 0;

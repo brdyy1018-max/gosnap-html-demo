@@ -470,6 +470,15 @@
               </span>
               <label class="toggle"><input type="checkbox" id="toggle-auto-position" checked onchange="App.onAutoPositionToggle(this.checked)" /><span></span></label>
             </div>
+            <div class="settings-row settings-row--toggle">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.3 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.3a2 2 0 00-3.4 0Z"/><path d="M12 9v4M12 17h.01" stroke-linecap="round"/></svg>
+                </span>
+                Simulate Failed Checks
+              </span>
+              <label class="toggle"><input type="checkbox" id="toggle-simulate-failed-checks" onchange="App.onSimulateFailedChecksToggle(this.checked)" /><span></span></label>
+            </div>
           </div>
 
           <h3 class="settings-section-title">Privacy & Security</h3>
@@ -525,6 +534,84 @@
     </div>
 
     <!-- Bottom sheets & modals -->
+    <div class="overlay overlay-center" id="modal-gps-auth">
+      <div class="ios-dialog-wrap">
+        <div class="ios-location-alert">
+          <h3 class="ios-alert-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
+          <p class="ios-alert-body">
+            Your precise location is used to verify you are at the task start point before recording.
+          </p>
+          <div class="ios-map-preview">
+            <div class="ios-precise-pill">
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                <path d="M8 1.5a5 5 0 015 5c0 3.5-5 8.5-5 8.5S3 10 3 6.5a5 5 0 015-5Z" fill="currentColor"/>
+                <circle cx="8" cy="6.5" r="1.6" fill="#fff"/>
+              </svg>
+              Precise: On
+            </div>
+            <span class="ios-map-dot" aria-hidden="true"></span>
+          </div>
+          <div class="ios-alert-actions">
+            <button type="button" class="ios-alert-btn" onclick="App.confirmGpsAuth('once')">Allow Once</button>
+            <button type="button" class="ios-alert-btn" onclick="App.confirmGpsAuth('while')">Allow While Using App</button>
+            <button type="button" class="ios-alert-btn" onclick="App.confirmGpsAuth('deny')">Don&rsquo;t Allow</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay-center" id="modal-ios-storage">
+      <div class="ios-dialog-wrap">
+        <div class="ios-location-alert">
+          <h3 class="ios-alert-title">Not Enough Storage</h3>
+          <p class="ios-alert-body">
+            GoSnap needs more free space to record this route. You can manage storage in Settings.
+          </p>
+          <div class="ios-alert-actions">
+            <button type="button" class="ios-alert-btn" onclick="App.returnFromStorageAlert()">Cancel</button>
+            <button type="button" class="ios-alert-btn" onclick="App.openStorageSettings()">Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-storage-settings">
+      <div class="bottom-sheet ios-storage-sheet">
+        <div class="ios-settings-nav">
+          <button type="button" class="ios-settings-nav-btn" onclick="App.closeStorageSettings()">Cancel</button>
+          <strong>iPhone Storage</strong>
+          <button type="button" class="ios-settings-nav-btn ios-settings-nav-btn--primary" onclick="App.confirmStorageFix()">Done</button>
+        </div>
+        <div class="ios-storage-summary">
+          <div class="ios-storage-meter" aria-hidden="true">
+            <span class="ios-storage-seg ios-storage-seg--apps"></span>
+            <span class="ios-storage-seg ios-storage-seg--photos"></span>
+            <span class="ios-storage-seg ios-storage-seg--system"></span>
+            <span class="ios-storage-seg ios-storage-seg--free"></span>
+          </div>
+          <p class="ios-storage-caption">99.6 GB of 128 GB Used</p>
+        </div>
+        <div class="ios-storage-list">
+          <div class="ios-storage-row">
+            <div class="ios-storage-app-icon">G</div>
+            <div class="ios-storage-row-body">
+              <strong>GoSnap</strong>
+              <span>2.1 GB</span>
+            </div>
+            <button type="button" class="ios-storage-offload" onclick="App.confirmStorageFix()">Offload App</button>
+          </div>
+          <div class="ios-storage-row muted">
+            <div class="ios-storage-app-icon ios-storage-app-icon--muted">P</div>
+            <div class="ios-storage-row-body">
+              <strong>Photos</strong>
+              <span>48.2 GB</span>
+            </div>
+          </div>
+        </div>
+        <p class="ios-storage-hint">Free up space, then tap Done to continue.</p>
+      </div>
+    </div>
+
     <div class="overlay overlay-sheet" id="modal-location">
       <div class="bottom-sheet">
         <strong>Location Permission Required</strong>
@@ -566,8 +653,8 @@
       <div class="bottom-sheet alert-sheet">
         <div class="alert-icon red">💾</div>
         <h3>Insufficient Storage Space</h3>
-        <p>Free up space on your GoPro SD card before recording.</p>
-        <button class="btn btn-primary" onclick="App.fixCheck('storage')">Clear up space</button>
+        <p>Free up space on your device before recording.</p>
+        <button class="btn btn-primary" onclick="App.fixPrecondition('storage')">Manage Storage</button>
       </div>
     </div>
 
@@ -669,5 +756,5 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260610a"></script>  </body>
+    <script src="app.js?v=20260610d"></script>  </body>
 </html>
