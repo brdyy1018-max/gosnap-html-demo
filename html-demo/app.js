@@ -1533,14 +1533,12 @@ const App = {
     if (!allPreconditionsOk()) return;
     state.preconditionFixReturn = false;
     App.closeModal('modal-precondition');
-    state.mapMode = 'navigating';
     state.recSeconds = 0;
     state.mapAlertDismissed = false;
     state.captureRestMode = false;
     App.renderMapTasks({ skipFit: true });
     App.renderTaskSheet();
-    App.updateMapChrome();
-    toast('Navigate to route start');
+    App.tapRecord();
   },
 
   tapRecord() {
