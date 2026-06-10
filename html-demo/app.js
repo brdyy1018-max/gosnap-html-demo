@@ -62,13 +62,47 @@ const DEVICE_CHECKS = [
   { id: 'storage', icon: '💾', title: 'Storage Space', modal: 'modal-storage' },
 ];
 
+const PRECONDITION_ROWS = [
+  {
+    id: 'bluetooth',
+    title: 'Bluetooth',
+    icon: 'bluetooth',
+    ok: 'Connected to GoPro',
+    err: 'Not connected to GoPro',
+  },
+  {
+    id: 'network',
+    title: 'Network',
+    ok: 'Network is good',
+    err: 'Weak or No Connection',
+  },
+  {
+    id: 'gps',
+    title: 'GPS Positioning',
+    icon: 'gps',
+    ok: 'Set to Always Allow',
+    err: 'Location Access Denied',
+  },
+];
+
+function preconditionRowIcon(name) {
+  const icons = {
+    bluetooth:
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m7 7 10 10-5 1 1-5Z"/><path d="m17 7-10 10 5 1-1-5Z"/></svg>',
+    network:
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>',
+    gps:
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  };
+  return icons[name] || '';
+}
+
 function seg(id, name, address, start, end, opts = {}) {
-  const mid = { lat: (start.lat + end.lat) / 2, lng: (start.lng + end.lng) / 2 };
   return {
     task_id: id,
     poi_name: name,
     poi_address: address,
-    polyline: [start, mid, end],
+    polyline: [start, end],
     start_point: start,
     end_point: end,
     distance_km: 1.4,
@@ -77,6 +111,7 @@ function seg(id, name, address, start, end, opts = {}) {
     dispatch_round: opts.dispatch_round || 'first',
     display_state: opts.display_state || 'unclaimed',
     claimed_by_me: !!opts.claimed_by_me,
+    review_status: opts.review_status,
   };
 }
 
@@ -88,25 +123,39 @@ const state = {
   filterDraft: null,
   progressLayers: Object.fromEntries(PROGRESS_LAYERS.map((l) => [l.id, true])),
   taskFilter: 'all',
+  taskStatusFilter: 'all',
+  taskDatePreset: 'all',
+  taskDateLabel: 'Date',
+  taskDateSelected: null,
+  selectedRecordId: null,
   selectedTaskId: null,
   mapMode: 'idle', // idle | navigating | recording | completing | review
   recSeconds: 0,
   recInterval: null,
+  activeRouteLayer: null,
+  mapAlertDismissed: false,
+  captureRestMode: false,
   skipSafety: false,
   deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
-  preconditions: { bluetooth: true, network: true },
-  polylines: {},
+  preconditions: { bluetooth: true, network: true, gps: true },
+  mapTaskLayers: {},
   progressPolylines: {},
-  undoTaskId: null,
+  routeCache: {},
+  routePending: new Set(),
+  precheckMap: null,
+  precheckStep: 'location',
+  selectedGopro: 'GoPro_1',
+  precheckTimer: null,
+  statusBarCollapsed: false,
   auth: null,
   mapTasks: [
     seg('task_vermont_001', 'S Vermont Ave', '1200 S Vermont Ave, Los Angeles, CA', { lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }),
     seg('task_high_002', 'Sunset Blvd', 'Sunset Blvd, Los Angeles, CA', { lat: 34.098, lng: -118.326 }, { lat: 34.1, lng: -118.32 }, { display_state: 'claimed', claimed_by_me: true, priority: 'high' }),
     seg('task_wilshire_003', 'Wilshire Blvd', '3400 Wilshire Blvd, Los Angeles, CA', { lat: 34.0615, lng: -118.308 }, { lat: 34.063, lng: -118.3 }),
     seg('task_fig_004', 'Figueroa St', '2200 Figueroa St, Los Angeles, CA', { lat: 34.038, lng: -118.278 }, { lat: 34.041, lng: -118.272 }, { display_state: 'claimed', claimed_by_me: true }),
-    seg('task_melrose_005', 'Melrose Ave', '7600 Melrose Ave, Los Angeles, CA', { lat: 34.083, lng: -118.365 }, { lat: 34.085, lng: -118.358 }, { display_state: 'completed_local' }),
+    seg('task_melrose_005', 'Melrose Ave', '7600 Melrose Ave, Los Angeles, CA', { lat: 34.083, lng: -118.365 }, { lat: 34.085, lng: -118.358 }, { display_state: 'completed_local', review_status: 'approved' }),
     seg('task_broadway_006', 'Broadway DTLA', '500 S Broadway, Los Angeles, CA', { lat: 34.047, lng: -118.252 }, { lat: 34.05, lng: -118.245 }, { dispatch_round: 'second' }),
-    seg('task_hollywood_009', 'Hollywood Blvd', '6801 Hollywood Blvd, Los Angeles, CA', { lat: 34.101, lng: -118.337 }, { lat: 34.104, lng: -118.33 }, { priority: 'high' }),
+    seg('task_hollywood_009', 'Sorrento Valley', '900 Exposition Blvd, Los Angeles, CA', { lat: 34.101, lng: -118.337 }, { lat: 34.104, lng: -118.33 }, { priority: 'high', distance_from_user_km: 36.6, distance_km: 6.3 }),
     seg('task_venice_012', 'Venice Blvd', '1500 Venice Blvd, Los Angeles, CA', { lat: 34.005, lng: -118.44 }, { lat: 34.01, lng: -118.432 }, { display_state: 'claimed', claimed_by_me: true, dispatch_round: 'second' }),
     seg('task_done_high_013', 'Pico Blvd', '2300 Pico Blvd, Santa Monica, CA', { lat: 34.028, lng: -118.455 }, { lat: 34.032, lng: -118.448 }, { display_state: 'completed_local', priority: 'high' }),
     seg('task_second_high_014', 'Lincoln Blvd', '3100 Lincoln Blvd, Santa Monica, CA', { lat: 34.018, lng: -118.47 }, { lat: 34.022, lng: -118.462 }, { dispatch_round: 'second', priority: 'high' }),
@@ -120,11 +169,71 @@ const state = {
     seg('task_second_completed_022', 'Vermont Ave North', '3000 N Vermont Ave, Los Angeles, CA', { lat: 34.115, lng: -118.292 }, { lat: 34.118, lng: -118.286 }, { display_state: 'completed_local', dispatch_round: 'second' }),
   ],
   records: [
-    { task_id: 'task_done_100', title: 'Sorrento Valley', shot_at: new Date().toISOString(), duration: '10m3s', size: '50.2M', status: 'approved', sector: 'Sector 4-B' },
-    { task_id: 'task_review_102', title: 'Hollywood Blvd', shot_at: new Date(Date.now() - 7200000).toISOString(), duration: '9m45s', size: '48.0M', status: 'reviewing', sector: 'Sector 3-C' },
-    { task_id: 'task_pending_103', title: 'Wilshire Blvd', shot_at: new Date(Date.now() - 5400000).toISOString(), duration: '7m20s', size: '38.5M', status: 'pending', sector: 'Sector 1-A' },
-    { task_id: 'task_upload_101', title: 'S Vermont Ave', shot_at: new Date(Date.now() - 3600000).toISOString(), duration: '8m12s', size: '42.1M', status: 'uploading', sector: 'Sector 2-A' },
-    { task_id: 'task_claimed_104', title: 'Figueroa St', shot_at: new Date(Date.now() - 86400000).toISOString(), duration: '—', size: '—', status: 'claimed', sector: 'Sector 2-B' },
+    {
+      task_id: 'task_vermont_today',
+      mapping_title: 'S Vermont Ave Mapping',
+      ticket_id: '490539356-479',
+      address: '1200 S Vermont Ave, Los Angeles, CA 90006, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setHours(10, 0, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '10m3s',
+      size: '50.2M',
+      status: 'approved',
+      audit_stage: 'completed',
+      thumb: 'pool',
+    },
+    {
+      task_id: 'task_olympic_today',
+      mapping_title: 'Olympic Blvd Corridor',
+      ticket_id: '490528901-468',
+      address: '1800 W Olympic Blvd, Los Angeles, CA 90006, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setHours(11, 30, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '8m20s',
+      size: '45.8M',
+      status: 'pending',
+      audit_stage: 'reviewing',
+      thumb: 'urban',
+    },
+    {
+      task_id: 'task_wilshire_today',
+      mapping_title: 'Wilshire Transit Node',
+      ticket_id: '490520056-470',
+      address: '3400 Wilshire Blvd, Los Angeles, CA 90010, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setHours(14, 15, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '7m20s',
+      size: '38.5M',
+      status: 'rejected',
+      audit_stage: 'completed',
+      thumb: 'street',
+    },
+    {
+      task_id: 'task_vermont_yesterday',
+      mapping_title: 'S Vermont Ave Mapping',
+      ticket_id: '490501122-441',
+      address: '1200 S Vermont Ave, Los Angeles, CA 90006, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        d.setHours(10, 0, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '10m3s',
+      size: '50.2M',
+      status: 'pending',
+      audit_stage: 'reviewing',
+      thumb: 'pool',
+    },
   ],
   progressTasks: [
     { task_id: 'prog_vermont', poi_name: 'S Vermont Ave', progress_status: 'approved', polyline: [{ lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }] },
@@ -136,6 +245,10 @@ const state = {
     { task_id: 'prog_sunset', poi_name: 'Sunset Blvd', progress_status: 'rejected', polyline: [{ lat: 34.098, lng: -118.326 }, { lat: 34.1, lng: -118.32 }] },
   ],
   selectedProgressId: null,
+  settings: {
+    autoPosition: true,
+    autoUpdates: true,
+  },
 };
 
 function getTaskLifecycle(t) {
@@ -152,27 +265,225 @@ function getTaskPriority(t) {
   return t.priority === 'high' ? 'high' : 'normal';
 }
 
-function getLifecycleColor(t) {
+/** Line color per icon status design spec */
+function getTaskLineColor(t) {
   const lc = getTaskLifecycle(t);
   if (lc === 'completed') return COLORS.completed;
   if (lc === 'claimed') return COLORS.claimed;
-  return COLORS.unclaimed;
+  return getTaskPriority(t) === 'high' ? COLORS.high : COLORS.unclaimed;
 }
 
-/** PRD: unclaimed high-priority routes render red; otherwise lifecycle color */
-function getTaskLineColor(t) {
-  if (getTaskLifecycle(t) === 'unclaimed' && getTaskPriority(t) === 'high') {
-    return COLORS.high;
+function getTaskLineStyle(t, isSelected) {
+  const high = getTaskPriority(t) === 'high';
+  const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+  const activeDrive =
+    driving && t.task_id === state.selectedTaskId && getTaskLifecycle(t) !== 'completed';
+  if (activeDrive) {
+    return {
+      color: '#F59E0B',
+      weight: isSelected ? 10 : 8,
+      opacity: 0.95,
+      lineCap: 'round',
+      lineJoin: 'round',
+      dashArray: null,
+    };
   }
-  return getLifecycleColor(t);
+  return {
+    color: getTaskLineColor(t),
+    weight: isSelected ? 10 : 7,
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round',
+    dashArray: high ? null : '12 10',
+  };
+}
+
+function renderCaptureControls() {
+  const el = document.getElementById('capture-controls');
+  if (!el) return;
+
+  if (state.mapMode === 'navigating') {
+    el.innerHTML =
+      '<span class="capture-spacer" aria-hidden="true"></span>' +
+      '<button type="button" class="capture-record" onclick="App.tapRecord()" aria-label="Start recording"></button>' +
+      '<button type="button" class="capture-complete is-disabled" disabled aria-label="Complete">✓</button>';
+    return;
+  }
+
+  if (state.mapMode === 'recording') {
+    el.innerHTML =
+      '<button type="button" class="capture-cancel" disabled aria-label="Cancel">×</button>' +
+      '<button type="button" class="capture-stop" onclick="App.stopRecording()" aria-label="Stop recording"></button>' +
+      '<button type="button" class="capture-complete is-disabled" disabled aria-label="Complete">✓</button>';
+    return;
+  }
+
+  if (state.mapMode === 'completing') {
+    el.innerHTML =
+      '<button type="button" class="capture-cancel" disabled aria-label="Cancel">×</button>' +
+      '<button type="button" class="capture-stop is-disabled" disabled aria-label="Stopped"></button>' +
+      '<button type="button" class="capture-complete" onclick="App.completeTask()" aria-label="Complete task">✓</button>';
+  }
+}
+
+const REVIEW_STATUS_LABELS = {
+  awaiting: 'Submitted - Awaiting Review',
+  rejected: 'Submitted - Review Failed',
+  approved: 'Submitted - Review Successful',
+};
+
+function mapPinTargetIcon() {
+  return (
+    '<span class="map-pin-target" aria-hidden="true">' +
+    '<span class="map-pin-target-outer"></span>' +
+    '<span class="map-pin-target-inner"></span>' +
+    '</span>'
+  );
+}
+
+function mapPinCheckIcon(color) {
+  return (
+    '<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">' +
+    `<path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` +
+    '</svg>'
+  );
+}
+
+function mapPinPersonIcon(color) {
+  return (
+    '<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">' +
+    `<circle cx="10" cy="6.5" r="3" fill="${color}"/>` +
+    `<path d="M4.5 17c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>` +
+    '</svg>'
+  );
+}
+
+/**
+ * Icon status design spec — 5 glyphs total:
+ * 1. Claimed: single person (1st/2nd dispatch share the same icon)
+ * 2. Unclaimed 1st: target
+ * 3. Unclaimed 2nd: "2"
+ * 4. Completed: check
+ * High vs normal differs by fill/outline + line style, not by doubling people.
+ */
+function getTaskStartMarkerHtml(t) {
+  const lc = getTaskLifecycle(t);
+  const second = getTaskDispatch(t) === 'second';
+  const high = getTaskPriority(t) === 'high';
+  const shapeClass = high ? 'shape-square' : 'shape-circle';
+
+  let headClass = '';
+  let inner = '';
+
+  if (lc === 'completed') {
+    headClass = high ? 'tone-green' : 'tone-green-outline';
+    inner = mapPinCheckIcon(high ? '#fff' : '#2ba471');
+  } else if (lc === 'claimed') {
+    headClass = high ? 'tone-orange' : 'tone-orange-outline';
+    inner = mapPinPersonIcon(high ? '#fff' : '#f59e0b');
+  } else if (second) {
+    headClass = 'tone-blue-outline';
+    inner = '<span class="map-pin-num">2</span>';
+  } else {
+    headClass = 'tone-blue-outline';
+    inner = mapPinTargetIcon();
+  }
+
+  return (
+    `<div class="map-pin-wrap">` +
+    `<div class="map-pin-head ${shapeClass} ${headClass}">${inner}</div>` +
+    `<div class="map-pin-stem"></div>` +
+    `<div class="map-pin-anchor"></div>` +
+    `</div>`
+  );
+}
+
+function getTaskEndMarkerHtml(t) {
+  const high = getTaskPriority(t) === 'high';
+  if (high) return '<div class="map-end-square"></div>';
+  return '<div class="map-end-circle"></div>';
+}
+
+function clearMapTaskLayers() {
+  if (!state.map) return;
+  Object.values(state.mapTaskLayers).forEach((layers) => {
+    layers.line.remove();
+    layers.start.remove();
+    layers.end.remove();
+  });
+  state.mapTaskLayers = {};
+}
+
+function getTaskEndpoints(t) {
+  if (t.start_point && t.end_point) return { start: t.start_point, end: t.end_point };
+  const pl = t.polyline;
+  return { start: pl[0], end: pl[pl.length - 1] };
+}
+
+function routeCacheKey(start, end) {
+  return `${start.lat.toFixed(5)},${start.lng.toFixed(5)}->${end.lat.toFixed(5)},${end.lng.toFixed(5)}`;
+}
+
+function getTaskLatLngs(t) {
+  const pts = t.routedPolyline || t.polyline;
+  return pts.map((p) => [p.lat, p.lng]);
+}
+
+async function fetchRoadRoute(start, end) {
+  const url =
+    `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}` +
+    '?overview=full&geometries=geojson';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('route request failed');
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+    throw new Error('no route found');
+  }
+  return data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
+}
+
+function ensureTaskRoutes(tasks, onUpdate) {
+  tasks.forEach((t) => {
+    const { start, end } = getTaskEndpoints(t);
+    const key = routeCacheKey(start, end);
+
+    if (state.routeCache[key]) {
+      t.routedPolyline = state.routeCache[key];
+      return;
+    }
+    if (state.routePending.has(key)) return;
+
+    state.routePending.add(key);
+    fetchRoadRoute(start, end)
+      .then((points) => {
+        state.routeCache[key] = points;
+        tasks.forEach((task) => {
+          const ep = getTaskEndpoints(task);
+          if (routeCacheKey(ep.start, ep.end) === key) task.routedPolyline = points;
+        });
+        onUpdate?.();
+      })
+      .catch(() => {})
+      .finally(() => {
+        state.routePending.delete(key);
+      });
+  });
+}
+
+let routeRefreshTimer;
+function scheduleRouteRefresh(screen, fn) {
+  clearTimeout(routeRefreshTimer);
+  routeRefreshTimer = setTimeout(() => {
+    if (state.screen === screen) fn({ skipFit: true });
+  }, 120);
 }
 
 function renderTaskBadges(t) {
   const badges = [];
-  if (t.priority === 'high') badges.push('<span class="badge badge-high">High priority</span>');
-  if (t.dispatch_round === 'second') badges.push('<span class="badge badge-second">2nd dispatch</span>');
+  if (t.priority === 'high') badges.push('<span class="task-tag task-tag-high">HIGH</span>');
+  if (t.dispatch_round === 'second') badges.push('<span class="task-tag task-tag-second">2ND</span>');
   if (!badges.length) return '';
-  return `<div class="badges">${badges.join('')}</div>`;
+  return `<div class="task-sheet-tags">${badges.join('')}</div>`;
 }
 
 function filterTasksByMapFilters(tasks, filters) {
@@ -201,15 +512,172 @@ function formatTime(sec) {
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.remove('toast--success');
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2800);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function toastSuccess(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('toast--success', 'show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show', 'toast--success'), 2800);
 }
 
 function computeStats() {
-  const today = state.records.filter((r) => ['approved', 'uploading', 'pending', 'reviewing'].includes(r.status)).length;
-  const total = state.records.length;
-  const pending = state.records.filter((r) => ['pending', 'reviewing'].includes(r.status)).length;
-  return { today, total, pending };
+  return { done: 12, todo: 150, passed: 10 };
+}
+
+function canUndoRecord(r) {
+  return ['pending', 'reviewing'].includes(r.status);
+}
+
+function getRecordStatusClass(status) {
+  if (status === 'approved') return 'approved';
+  if (status === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+function formatRecordDate(iso) {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function getRecordStatusLabel(status) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Rejected';
+  return 'Pending';
+}
+
+function getRecordStatusTone(status) {
+  if (status === 'approved') return ['#dcfce7', '#15803d'];
+  if (status === 'rejected') return ['#fee2e2', '#dc2626'];
+  return ['#fef3c7', '#a16207'];
+}
+
+function groupRecordsByDay(records) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+  const groups = [];
+  const today = [];
+  const yesterday = [];
+  const earlier = [];
+
+  records.forEach((r) => {
+    const d = new Date(r.shot_at);
+    if (d >= startOfToday) today.push(r);
+    else if (d >= startOfYesterday) yesterday.push(r);
+    else earlier.push(r);
+  });
+
+  if (today.length) groups.push({ label: 'Today', items: today });
+  if (yesterday.length) groups.push({ label: 'Yesterday', items: yesterday });
+  if (earlier.length) groups.push({ label: 'Earlier', items: earlier });
+  return groups;
+}
+
+function renderMonthCalendar(monthDate) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const title = monthDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i += 1) {
+    cells += '<span class="cal-cell cal-cell--empty" aria-hidden="true"></span>';
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const selected = state.taskDateSelected === iso;
+    cells += `<button type="button" class="cal-cell cal-cell--day${selected ? ' is-selected' : ''}" onclick="App.selectTaskDate('${iso}')">${day}</button>`;
+  }
+
+  return (
+    `<section class="calendar-block">` +
+    `<h4 class="calendar-title">${title}</h4>` +
+    `<div class="calendar-grid">${cells}</div>` +
+    `</section>`
+  );
+}
+
+function renderTaskDateCalendar() {
+  const container = document.getElementById('task-date-calendar');
+  if (!container) return;
+  const now = new Date();
+  const months = [
+    new Date(now.getFullYear(), now.getMonth(), 1),
+    new Date(now.getFullYear(), now.getMonth() + 1, 1),
+  ];
+  const weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+    .map((d) => `<span>${d}</span>`)
+    .join('');
+  container.innerHTML =
+    `<div class="calendar-weekdays">${weekdays}</div>` +
+    months.map((month) => renderMonthCalendar(month)).join('');
+}
+
+function filterRecordsForTasksPage() {
+  let rows = state.records.filter((r) => ['approved', 'pending', 'reviewing', 'rejected'].includes(r.status));
+  if (state.taskStatusFilter !== 'all') {
+    if (state.taskStatusFilter === 'pending') {
+      rows = rows.filter((r) => ['pending', 'reviewing'].includes(r.status));
+    } else {
+      rows = rows.filter((r) => r.status === state.taskStatusFilter);
+    }
+  }
+  if (state.taskDateSelected) {
+    const selected = new Date(`${state.taskDateSelected}T00:00:00`);
+    const next = new Date(selected);
+    next.setDate(next.getDate() + 1);
+    rows = rows.filter((r) => {
+      const d = new Date(r.shot_at);
+      return d >= selected && d < next;
+    });
+  } else if (state.taskDatePreset === 'today') {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    rows = rows.filter((r) => new Date(r.shot_at) >= start);
+  } else if (state.taskDatePreset === 'week') {
+    const start = new Date();
+    start.setDate(start.getDate() - start.getDay() + (start.getDay() === 0 ? -6 : 1));
+    start.setHours(0, 0, 0, 0);
+    rows = rows.filter((r) => new Date(r.shot_at) >= start);
+  } else if (state.taskDatePreset === 'last7') {
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    start.setHours(0, 0, 0, 0);
+    rows = rows.filter((r) => new Date(r.shot_at) >= start);
+  } else if (state.taskDatePreset === 'month') {
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    rows = rows.filter((r) => new Date(r.shot_at) >= start);
+  }
+  return rows;
+}
+
+function getAuditSteps(record) {
+  const stage = record.audit_stage || 'submitted';
+  return [
+    { id: 'submitted', label: 'Submitted', state: 'done' },
+    {
+      id: 'reviewing',
+      label: 'Reviewing',
+      state: stage === 'reviewing' ? 'current' : stage === 'completed' ? 'done' : 'todo',
+    },
+    { id: 'completed', label: 'Completed', state: stage === 'completed' ? 'done' : 'todo' },
+  ];
 }
 
 function settlementSummary() {
@@ -227,15 +695,17 @@ const App = {
       precheck: 'screen-precheck',
       map: 'screen-map',
       tasks: 'screen-tasks',
+      'task-detail': 'screen-task-detail',
       'progress-map': 'screen-progress-map',
       settings: 'screen-settings',
+      version: 'screen-version',
     };
     document.getElementById(map[screen]).classList.add('active');
     state.screen = screen;
     document.getElementById('filter-sheet').classList.remove('show');
     document.getElementById('progress-layer-panel').classList.remove('show');
 
-    if (screen === 'precheck') App.renderPrecheck();
+    if (screen === 'precheck') App.startPrecheckFlow();
     if (screen === 'map') {
       setTimeout(() => {
         if (!state.map) App.initMap();
@@ -246,7 +716,9 @@ const App = {
       }, 100);
     }
     if (screen === 'tasks') App.renderTaskList();
+    if (screen === 'task-detail') App.renderTaskDetail();
     if (screen === 'settings') App.updateSettingsProfile();
+    if (screen === 'version') App.syncSettingsToggles();
     if (screen === 'progress-map') {
       setTimeout(() => {
         if (!state.progressMap) App.initProgressMap();
@@ -308,11 +780,38 @@ const App = {
   },
 
   updateSettingsProfile() {
-    if (!state.auth) return;
+    const userId = state.auth?.userId || 'US-156';
     const nameEl = document.getElementById('settings-user-id');
-    const idEl = document.getElementById('settings-profile-id');
-    if (nameEl) nameEl.textContent = state.auth.userId;
-    if (idEl) idEl.textContent = `ID · ${state.auth.userId}`;
+    const logoutEl = document.getElementById('logout-user-id');
+    if (nameEl) nameEl.textContent = userId;
+    if (logoutEl) logoutEl.textContent = userId;
+    App.syncSettingsToggles();
+  },
+
+  syncSettingsToggles() {
+    const autoPos = document.getElementById('toggle-auto-position');
+    const autoUpd = document.getElementById('toggle-auto-updates');
+    if (autoPos) autoPos.checked = state.settings.autoPosition;
+    if (autoUpd) autoUpd.checked = state.settings.autoUpdates;
+  },
+
+  onAutoPositionToggle(on) {
+    state.settings.autoPosition = on;
+    toast(on ? 'Auto-Position enabled' : 'Auto-Position disabled');
+  },
+
+  onAutoUpdatesToggle(on) {
+    state.settings.autoUpdates = on;
+    toast(on ? 'Auto Updates enabled' : 'Auto Updates disabled');
+  },
+
+  refreshSettings() {
+    App.updateSettingsProfile();
+    toast('Refreshed');
+  },
+
+  refreshVersion() {
+    toast('This is the latest version');
   },
 
   onRegionChange() {
@@ -370,24 +869,101 @@ const App = {
     input.type = input.type === 'password' ? 'text' : 'password';
   },
 
-  renderPrecheck() {
-    document.getElementById('check-list').innerHTML = DEVICE_CHECKS.map((c) => {
-      const ok = state.deviceChecks[c.id];
-      return `<div class="check-item ${ok ? 'ok' : 'err'}" onclick="App.openCheckModal('${c.id}')">
-        <div class="check-icon">${c.icon}</div>
-        <div class="check-title">${c.title}</div>
-        <div class="check-badge">${ok ? '✓ Normal' : '✕ Abnormal'}</div>
-      </div>`;
-    }).join('');
+  startPrecheckFlow() {
+    if (state.precheckTimer) {
+      clearTimeout(state.precheckTimer);
+      state.precheckTimer = null;
+    }
+    state.precheckStep = 'location';
+    state.selectedGopro = 'GoPro_1';
+    state.deviceChecks = { gps: false, bluetooth: false, network: true, storage: true };
+    state.preconditions = { bluetooth: false, network: true, gps: false };
+    document.querySelectorAll('#gopro-list .gopro-option').forEach((el, i) => {
+      el.classList.toggle('selected', i === 0);
+      const input = el.querySelector('input');
+      if (input) input.checked = i === 0;
+    });
+    setTimeout(() => {
+      App.initPrecheckMap();
+      App.showPrecheckStep('location');
+    }, 120);
+  },
 
-    const btn = document.getElementById('btn-start-check');
-    btn.disabled = !allDeviceChecksOk();
-    btn.classList.toggle('disabled', !allDeviceChecksOk());
+  initPrecheckMap() {
+    if (state.precheckMap) {
+      state.precheckMap.invalidateSize();
+      return;
+    }
+    state.precheckMap = L.map('precheck-map', {
+      zoomControl: false,
+      attributionControl: false,
+    }).setView([48.8566, 2.3522], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+    }).addTo(state.precheckMap);
+  },
+
+  showPrecheckStep(step) {
+    state.precheckStep = step;
+    document.querySelectorAll('.precheck-step').forEach((el) => el.classList.remove('show'));
+    const target = document.getElementById(`precheck-step-${step}`);
+    if (target) target.classList.add('show');
+    if (state.precheckMap) setTimeout(() => state.precheckMap.invalidateSize(), 80);
+  },
+
+  precheckLocationAllow() {
+    state.deviceChecks.gps = true;
+    state.preconditions.gps = true;
+    App.showPrecheckStep('bluetooth');
+  },
+
+  precheckBluetoothNext() {
+    state.deviceChecks.bluetooth = true;
+    state.preconditions.bluetooth = true;
+    App.precheckStartConnecting();
+  },
+
+  precheckBluetoothSkip() {
+    if (state.precheckTimer) {
+      clearTimeout(state.precheckTimer);
+      state.precheckTimer = null;
+    }
+    App.go('map');
+  },
+
+  precheckStartConnecting() {
+    App.showPrecheckStep('connecting');
+    if (state.precheckTimer) clearTimeout(state.precheckTimer);
+    state.precheckTimer = setTimeout(() => {
+      state.precheckTimer = null;
+      App.showPrecheckStep('select');
+    }, 2200);
+  },
+
+  precheckSelectGopro(value) {
+    state.selectedGopro = value;
+    document.querySelectorAll('#gopro-list .gopro-option').forEach((el) => {
+      el.classList.toggle('selected', el.querySelector('input')?.value === value);
+    });
+  },
+
+  precheckGoproOk() {
+    state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
+    state.preconditions = { bluetooth: true, network: true, gps: true };
+    toast(`Connected to ${state.selectedGopro}`);
+    App.go('map');
+  },
+
+  precheckGoproClose() {
+    App.go('login');
+  },
+
+  renderPrecheck() {
+    App.startPrecheckFlow();
   },
 
   refreshPrecheck() {
-    toast('Re-checking device status…');
-    App.renderPrecheck();
+    App.startPrecheckFlow();
   },
 
   openCheckModal(id) {
@@ -400,86 +976,119 @@ const App = {
     state.deviceChecks[id] = true;
     if (id === 'bluetooth') state.preconditions.bluetooth = true;
     if (id === 'network') state.preconditions.network = true;
+    if (id === 'gps') state.preconditions.gps = true;
     DEVICE_CHECKS.forEach((c) => {
       if (c.id === id) document.getElementById(c.modal).classList.remove('show');
     });
-    App.renderPrecheck();
     App.renderPrecondition();
     toast('Status updated');
-    if (state.screen === 'precheck' && allDeviceChecksOk()) {
-      setTimeout(() => App.go('map'), 400);
-    }
   },
 
   startCheck() {
-    if (!allDeviceChecksOk()) return;
-    document.getElementById('modal-bluetooth').classList.add('show');
+    App.startPrecheckFlow();
   },
 
   closeModal(id) {
     document.getElementById(id).classList.remove('show');
-    if (id === 'modal-bluetooth' && state.screen === 'precheck' && allDeviceChecksOk()) {
-      setTimeout(() => App.go('map'), 350);
-    }
+  },
+
+  toggleStatusBar() {
+    state.statusBarCollapsed = !state.statusBarCollapsed;
+    const bar = document.getElementById('device-status-bar');
+    const btn = document.getElementById('device-lens-btn');
+    bar.classList.toggle('is-collapsed', state.statusBarCollapsed);
+    btn.setAttribute('aria-expanded', String(!state.statusBarCollapsed));
   },
 
   updateMapChrome() {
     const topChrome = document.getElementById('map-top-chrome');
+    const statusBar = document.getElementById('device-status-bar');
     const deviceDot = document.getElementById('device-dot');
     const deviceConn = document.getElementById('device-conn');
     const deviceBatt = document.getElementById('device-batt');
+    const deviceBattWrap = document.getElementById('device-batt-wrap');
+    const deviceSignal = document.getElementById('device-signal');
     const nav = document.getElementById('nav-banner');
     const speed = document.getElementById('speed-pill');
-    const recordReady = document.getElementById('record-ready');
-    const recPanel = document.getElementById('recording-panel');
-    const driveBar = document.getElementById('drive-bar');
+    const captureSheet = document.getElementById('capture-sheet');
+    const mapFloats = document.getElementById('map-float-actions');
+    const mapAlert = document.getElementById('map-alert');
     const sheet = document.getElementById('task-sheet');
     const mapRail = document.getElementById('map-rail');
 
     const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+
     topChrome.classList.toggle('hidden', driving);
     nav.classList.toggle('hidden', !driving);
     speed.classList.toggle('hidden', !driving);
+    captureSheet.classList.toggle('hidden', !driving);
+    mapFloats.classList.toggle('hidden', !driving);
 
-    recordReady.classList.toggle('hidden', state.mapMode !== 'navigating');
-    recPanel.classList.toggle('hidden', state.mapMode !== 'recording');
-    driveBar.classList.toggle('hidden', !['recording', 'completing'].includes(state.mapMode));
-
-    const hideSheet = driving || state.mapMode === 'review' || !state.selectedTaskId;
+    const hideSheet = driving || !state.selectedTaskId;
     sheet.classList.toggle('hidden', hideSheet);
 
     mapRail.classList.toggle('hidden', driving);
 
-    document.getElementById('drive-done').classList.toggle('hidden', state.mapMode !== 'completing');
-    document.getElementById('drive-stop').classList.toggle('disabled', state.mapMode === 'completing');
-
-    if (state.mapMode === 'recording' || state.mapMode === 'completing') {
-      document.getElementById('drive-timer').textContent = formatTime(state.recSeconds);
+    const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    if (t && driving) {
+      document.getElementById('capture-title').textContent = t.poi_name;
     }
+
+    if (driving) {
+      renderCaptureControls();
+      const time = formatTime(state.recSeconds);
+      document.getElementById('capture-time').textContent = time;
+      document.getElementById('capture-dot').classList.toggle('hidden', state.mapMode === 'navigating' && !state.recSeconds);
+    }
+
+    const showMemoryAlert =
+      state.mapMode === 'recording' && state.recSeconds >= 497 && !state.mapAlertDismissed;
+    mapAlert.classList.toggle('hidden', !showMemoryAlert);
+
+    const showRest = state.mapMode === 'recording' && state.recSeconds >= 995;
+    document.getElementById('map-float-rest').classList.toggle('hidden', !showRest);
+    document.getElementById('map-float-over').classList.toggle('hidden', showRest);
+
+    const deviceBattBolt = document.getElementById('device-batt-bolt');
 
     if (state.mapMode === 'recording') {
       deviceDot.className = 'device-dot err';
       deviceConn.textContent = 'REC';
       deviceBatt.textContent = '78';
+      deviceBattWrap.className = 'device-batt-wrap warn has-bolt';
+      statusBar.classList.remove('is-online');
+      deviceSignal.dataset.level = '3';
     } else if (allPreconditionsOk()) {
       deviceDot.className = 'device-dot';
-      deviceConn.textContent = 'CONN';
-      deviceBatt.textContent = '98';
+      deviceConn.textContent = 'CONNECTED';
+      deviceBatt.textContent = '51';
+      deviceBattWrap.className = 'device-batt-wrap connected has-bolt';
+      statusBar.classList.add('is-online');
+      deviceSignal.dataset.level = '5';
     } else {
       deviceDot.className = 'device-dot err';
-      deviceConn.textContent = 'DISC';
-      deviceBatt.textContent = '98';
+      deviceConn.textContent = 'DISCONNECTED';
+      deviceBatt.textContent = '14';
+      deviceBattWrap.className = 'device-batt-wrap low';
+      statusBar.classList.remove('is-online');
+      deviceSignal.dataset.level = '2';
     }
 
-    const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
-    if (t) document.getElementById('rec-location').textContent = t.poi_name;
+    if (deviceBattBolt) {
+      deviceBattBolt.classList.toggle('hidden', !deviceBattWrap.classList.contains('has-bolt'));
+    }
+
+    statusBar.classList.toggle('is-collapsed', state.statusBarCollapsed);
+
+    if (driving) App.renderMapTasks({ skipFit: true });
   },
 
   tickRec() {
     state.recSeconds++;
     const t = formatTime(state.recSeconds);
-    document.getElementById('rec-time').textContent = t;
-    document.getElementById('drive-timer').textContent = t;
+    const captureTime = document.getElementById('capture-time');
+    if (captureTime) captureTime.textContent = t;
+    App.updateMapChrome();
   },
 
   initMap() {
@@ -498,47 +1107,80 @@ const App = {
     App.renderProgressMap();
   },
 
-  renderMapTasks() {
+  renderMapTasks(options = {}) {
     if (!state.map) return;
-    Object.values(state.polylines).forEach((p) => state.map.removeLayer(p));
-    state.polylines = {};
+    clearMapTaskLayers();
 
     const visible = filterTasksByMapFilters(state.mapTasks, state.mapFilters);
-    const selected = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+    const inReview = state.mapMode === 'review';
+    let tasksToDraw = visible;
 
-    visible.forEach((t) => {
-      const latlngs = t.polyline.map((p) => [p.lat, p.lng]);
-      const isSelected = t.task_id === state.selectedTaskId;
-      const color = getTaskLineColor(t);
-      const line = L.polyline(latlngs, {
-        color,
-        weight: isSelected ? 8 : 5,
-        opacity: 0.92,
-      }).addTo(state.map);
-      line.on('click', () => App.selectTask(t.task_id));
-      state.polylines[t.task_id] = line;
+    if (driving && state.selectedTaskId) {
+      tasksToDraw = visible.filter((t) => t.task_id === state.selectedTaskId);
+    } else if (inReview && state.selectedTaskId) {
+      tasksToDraw = visible.filter((t) => t.task_id === state.selectedTaskId);
+    }
+
+    ensureTaskRoutes(tasksToDraw, () => {
+      scheduleRouteRefresh('map', (opts) => App.renderMapTasks(opts));
     });
 
-    if (selected) {
-      state.map.fitBounds(
-        L.latLngBounds(selected.polyline.map((p) => [p.lat, p.lng])),
-        { padding: [60, 40], animate: true }
-      );
-    } else if (visible.length) {
-      const bounds = L.latLngBounds(visible.flatMap((t) => t.polyline.map((p) => [p.lat, p.lng])));
-      state.map.fitBounds(bounds, { padding: [40, 40], animate: true });
+    tasksToDraw.forEach((t) => {
+      const latlngs = getTaskLatLngs(t);
+      const endpoints = getTaskEndpoints(t);
+      const isSelected = t.task_id === state.selectedTaskId;
+      const line = L.polyline(latlngs, getTaskLineStyle(t, isSelected)).addTo(state.map);
+      line.on('click', () => App.selectTask(t.task_id));
+
+      const startMarker = L.marker([endpoints.start.lat, endpoints.start.lng], {
+        icon: L.divIcon({
+          className: 'map-pin-marker',
+          html: getTaskStartMarkerHtml(t),
+          iconSize: [34, 52],
+          iconAnchor: [17, 52],
+        }),
+        interactive: false,
+      }).addTo(state.map);
+
+      const endMarker = L.marker([endpoints.end.lat, endpoints.end.lng], {
+        icon: L.divIcon({
+          className: 'map-end-marker',
+          html: getTaskEndMarkerHtml(t),
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        }),
+        interactive: false,
+      }).addTo(state.map);
+
+      state.mapTaskLayers[t.task_id] = { line, start: startMarker, end: endMarker };
+    });
+
+    const selected = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+
+    if (!options.skipFit) {
+      if (selected) {
+        state.map.fitBounds(L.latLngBounds(getTaskLatLngs(selected)), { padding: [60, 40], animate: true });
+      } else if (tasksToDraw.length) {
+        const bounds = L.latLngBounds(tasksToDraw.flatMap((t) => getTaskLatLngs(t)));
+        state.map.fitBounds(bounds, { padding: [40, 40], animate: true });
+      }
     }
   },
 
-  renderProgressMap() {
+  renderProgressMap(options = {}) {
     if (!state.progressMap) return;
     Object.values(state.progressPolylines).forEach((p) => state.progressMap.removeLayer(p));
     state.progressPolylines = {};
 
     const visible = state.progressTasks.filter((t) => state.progressLayers[t.progress_status]);
 
+    ensureTaskRoutes(visible, () => {
+      scheduleRouteRefresh('progress-map', (opts) => App.renderProgressMap(opts));
+    });
+
     visible.forEach((t) => {
-      const latlngs = t.polyline.map((p) => [p.lat, p.lng]);
+      const latlngs = getTaskLatLngs(t);
       const line = L.polyline(latlngs, {
         color: COLORS.progress[t.progress_status],
         weight: t.task_id === state.selectedProgressId ? 8 : 5,
@@ -552,8 +1194,8 @@ const App = {
       state.progressPolylines[t.task_id] = line;
     });
 
-    if (visible.length) {
-      const bounds = L.latLngBounds(visible.flatMap((t) => t.polyline.map((p) => [p.lat, p.lng])));
+    if (!options.skipFit && visible.length) {
+      const bounds = L.latLngBounds(visible.flatMap((t) => getTaskLatLngs(t)));
       state.progressMap.fitBounds(bounds, { padding: [30, 30] });
     }
   },
@@ -566,6 +1208,14 @@ const App = {
     App.updateMapChrome();
   },
 
+  closeTaskSheet() {
+    state.selectedTaskId = null;
+    if (state.mapMode === 'review') state.mapMode = 'idle';
+    App.renderMapTasks();
+    App.renderTaskSheet();
+    App.updateMapChrome();
+  },
+
   renderTaskSheet() {
     const sheet = document.getElementById('task-sheet');
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
@@ -573,44 +1223,72 @@ const App = {
       sheet.classList.add('hidden');
       return;
     }
+    sheet.classList.remove('hidden');
 
     const claimed = t.display_state === 'claimed' && t.claimed_by_me;
     const completed = t.display_state === 'completed_local';
+    const inReview = state.mapMode === 'review' || completed;
+    const tags = renderTaskBadges(t);
 
-    let title = 'Remote Driving';
-    let desc = 'Accept this road test route and drive the full segment to capture video.';
-    let btn = '';
+    const distanceActions = `<button type="button" class="task-icon-btn" onclick="toast('Opening Google Maps…')" aria-label="Navigate">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 11 18-8-8 18-2-7-8-3Z" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="task-icon-btn" onclick="toast('Address copied')" aria-label="Copy address">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </button>`;
 
-    if (state.mapMode === 'review' || completed) {
-      title = 'Remote Piloting';
-      desc = 'Your capture has been submitted and is waiting for review.';
-      btn = `<button class="btn btn-review" disabled>Completed — Send for Review</button>`;
+    let actions = '';
+    if (inReview) {
+      const status = t.review_status || 'awaiting';
+      const cls =
+        status === 'rejected' ? 'is-failed' : status === 'approved' ? 'is-success' : '';
+      actions = `<button type="button" class="btn btn-submitted ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
     } else if (claimed) {
-      title = 'Remote Piloting';
-      desc = `Route ready · ${t.distance_km} km · Navigate to the start point, then begin capture.`;
-      btn = `<button class="btn btn-success" onclick="App.openBegin()">Begin</button>`;
+      actions = `<div class="task-sheet-actions split">
+        <button type="button" class="task-release-btn" onclick="App.releaseTask('${t.task_id}')">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5 18 12 12 19 6 12Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Release</span>
+        </button>
+        <button class="btn btn-success task-sheet-begin" onclick="App.openBegin()">Begin</button>
+      </div>`;
     } else {
-      btn = `<button class="btn btn-primary" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
+      actions = `<button class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
 
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
-      <div class="sheet-accent" style="background:${getTaskLineColor(t)}"></div>
-      ${renderTaskBadges(t)}
-      <div class="sheet-title">${title}</div>
-      <div class="sheet-desc">${desc}</div>
-      <div class="sheet-route">${t.poi_name}</div>
-      <p class="address">${t.poi_address}</p>
-      <div class="metrics">
-        <div class="metric"><strong>${t.distance_km}</strong><span>KM route</span></div>
-        <div class="metric"><strong>${t.distance_from_user_km}</strong><span>KM to you</span></div>
+      <div class="task-sheet-head">
+        ${tags || '<span></span>'}
+        <button type="button" class="task-sheet-close" onclick="App.closeTaskSheet()" aria-label="Close">×</button>
       </div>
-      <div class="chips">
-        <button class="chip" onclick="toast('Opening Google Maps…')">↗ Navigate</button>
-        <button class="chip" onclick="toast('Task ID copied')">⎘ Task ID</button>
+      <h2 class="task-sheet-title">${t.poi_name}</h2>
+      <p class="task-sheet-meta">${t.distance_from_user_km} kilometers away from you | ${t.poi_address}</p>
+      <div class="task-distance-row">
+        <span class="task-distance-pin" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7Z" fill="#1a66ff"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg>
+        </span>
+        <div class="task-distance-track">
+          <div class="task-distance-line-wrap">
+            <span class="task-distance-line" aria-hidden="true"></span>
+            <span class="task-distance-value">${t.distance_km}km</span>
+          </div>
+        </div>
+        <div class="task-distance-actions">
+          ${distanceActions}
+        </div>
       </div>
-      ${btn}
+      ${actions}
     `;
+  },
+
+  releaseTask(id) {
+    const t = state.mapTasks.find((x) => x.task_id === id);
+    if (!t || !t.claimed_by_me) return;
+    t.display_state = 'unclaimed';
+    t.claimed_by_me = false;
+    App.renderMapTasks();
+    App.renderTaskSheet();
+    toast('Task released');
   },
 
   acceptTask(id) {
@@ -639,38 +1317,52 @@ const App = {
   },
 
   openPrecondition() {
+    state.preconditions.bluetooth = state.deviceChecks.bluetooth;
+    state.preconditions.network = state.deviceChecks.network;
+    state.preconditions.gps = state.deviceChecks.gps;
     App.renderPrecondition();
     document.getElementById('modal-precondition').classList.add('show');
   },
 
   renderPrecondition() {
-    const rows = [
-      { id: 'bluetooth', title: 'Bluetooth', ok: 'Connected to GoPro', err: 'Not connected to GoPro' },
-      { id: 'network', title: 'Network', ok: 'Network is good', err: 'Weak or No Connection' },
-    ];
-    document.getElementById('precondition-rows').innerHTML = rows
-      .map((r) => {
-        const ok = state.preconditions[r.id];
-        return `<div class="pre-row ${ok ? 'ok' : 'err'}">
-          <div><strong>${r.title}</strong><span>${ok ? r.ok : r.err}</span></div>
-          ${ok ? '<span class="pre-check">✓</span>' : `<button class="pre-action" onclick="App.fixPrecondition('${r.id}')">Set ›</button>`}
-        </div>`;
-      })
-      .join('');
+    document.getElementById('precondition-rows').innerHTML = PRECONDITION_ROWS.map((row) => {
+      const ok = state.preconditions[row.id];
+      const action = ok
+        ? '<span class="pre-card-check" aria-label="Ready"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+        : `<button type="button" class="pre-card-action" onclick="App.fixPrecondition('${row.id}')">Set ›</button>`;
+      return (
+        `<div class="pre-card ${ok ? 'is-ok' : 'is-err'}">` +
+        `<span class="pre-card-icon">${preconditionRowIcon(row.icon)}</span>` +
+        `<div class="pre-card-body"><strong>${row.title}</strong><span class="pre-card-sub">${ok ? row.ok : row.err}</span></div>` +
+        action +
+        `</div>`
+      );
+    }).join('');
+
     const btn = document.getElementById('btn-precondition-go');
-    btn.disabled = !allPreconditionsOk();
-    btn.classList.toggle('disabled', !allPreconditionsOk());
+    const ready = allPreconditionsOk();
+    btn.disabled = !ready;
+    btn.classList.toggle('disabled', !ready);
   },
 
   fixPrecondition(id) {
-    if (id === 'bluetooth') document.getElementById('modal-bluetooth').classList.add('show');
-    if (id === 'network') document.getElementById('modal-network').classList.add('show');
+    const modals = {
+      bluetooth: 'modal-bluetooth',
+      network: 'modal-network',
+      gps: 'modal-location',
+    };
+    const modal = modals[id];
+    if (modal) document.getElementById(modal).classList.add('show');
   },
 
   preconditionGo() {
     if (!allPreconditionsOk()) return;
     App.closeModal('modal-precondition');
     state.mapMode = 'navigating';
+    state.recSeconds = 0;
+    state.mapAlertDismissed = false;
+    state.captureRestMode = false;
+    App.renderMapTasks({ skipFit: true });
     App.renderTaskSheet();
     App.updateMapChrome();
     toast('Navigate to route start');
@@ -678,7 +1370,7 @@ const App = {
 
   tapRecord() {
     state.mapMode = 'recording';
-    state.recSeconds = 0;
+    if (!state.recSeconds) state.recSeconds = 0;
     clearInterval(state.recInterval);
     state.recInterval = setInterval(App.tickRec, 1000);
     App.updateMapChrome();
@@ -694,17 +1386,41 @@ const App = {
 
   completeTask() {
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
-    if (t) {
-      t.display_state = 'completed_local';
-      state.mapMode = 'review';
-      App.renderMapTasks();
-      App.renderTaskSheet();
-      App.updateMapChrome();
-      toast('Congrats! Your task has been completed successfully.');
-    }
+    if (!t || state.mapMode !== 'completing') return;
+    t.display_state = 'completed_local';
+    t.review_status = 'awaiting';
+    state.mapMode = 'review';
+    clearInterval(state.recInterval);
+    App.renderMapTasks();
+    App.renderTaskSheet();
+    App.updateMapChrome();
+    toast('Task submitted for review');
+  },
+
+  exitCapture() {
+    clearInterval(state.recInterval);
+    state.mapMode = 'idle';
+    state.recSeconds = 0;
+    state.mapAlertDismissed = false;
+    state.captureRestMode = false;
+    App.renderMapTasks();
+    App.renderTaskSheet();
+    App.updateMapChrome();
+    toast('Capture cancelled');
+  },
+
+  dismissMapAlert() {
+    state.mapAlertDismissed = true;
+    document.getElementById('map-alert').classList.add('hidden');
+  },
+
+  toggleCaptureRest() {
+    state.captureRestMode = !state.captureRestMode;
+    toast(state.captureRestMode ? 'Over — paused segment' : 'Over — resumed');
   },
 
   openLogoutModal() {
+    App.updateSettingsProfile();
     document.getElementById('modal-logout').classList.add('show');
   },
 
@@ -835,70 +1551,216 @@ const App = {
   renderTaskList() {
     const stats = computeStats();
     document.getElementById('tasks-summary').innerHTML = `
-      <div class="summary-item blue"><strong>${stats.today}</strong><span>Today</span></div>
-      <div class="summary-item"><strong>${stats.total}</strong><span>Total</span></div>
-      <div class="summary-item red"><strong>${stats.pending}</strong><span>Pending</span></div>`;
+      <div class="summary-item blue"><strong>${stats.done}</strong><span>DONE</span></div>
+      <div class="summary-item"><strong>${stats.todo}</strong><span>TO DO</span></div>
+      <div class="summary-item red"><strong>${stats.passed}</strong><span>PASSED</span></div>`;
 
-    const filters = [
-      { id: 'all', label: 'All' },
-      { id: 'approved', label: 'Approved' },
-      { id: 'reviewing', label: 'Reviewing' },
-      { id: 'pending', label: 'Pending' },
-      { id: 'claimed', label: 'Claimed' },
-    ];
-    document.getElementById('task-filters').innerHTML = filters
+    document.getElementById('task-date-filter-label').textContent = state.taskDateLabel;
+    document.getElementById('task-status-filter-label').textContent =
+      state.taskStatusFilter === 'all'
+        ? 'Status'
+        : state.taskStatusFilter.charAt(0).toUpperCase() + state.taskStatusFilter.slice(1);
+
+    const filtered = filterRecordsForTasksPage();
+    const groups = groupRecordsByDay(filtered);
+
+    if (!groups.length) {
+      document.getElementById('task-list').innerHTML =
+        '<div class="task-empty">No tasks match your filters.</div>';
+      return;
+    }
+
+    document.getElementById('task-list').innerHTML = groups
       .map(
-        (f) =>
-          `<button class="filter-tab ${state.taskFilter === f.id ? 'on' : ''}" onclick="App.setTaskFilter('${f.id}')">${f.label}</button>`
+        (group) => `
+        <section class="task-day-group">
+          <h3 class="task-day-label">${group.label}</h3>
+          ${group.items.map((r) => App.renderTaskCardHtml(r)).join('')}
+        </section>`
       )
       .join('');
+  },
 
-    const tones = {
-      approved: ['#D1FAE5', '#047857'],
-      reviewing: ['#EDE9FE', '#7C3AED'],
-      pending: ['#FEF3C7', '#B45309'],
-      uploading: ['#FEF3C7', '#B45309'],
-      claimed: ['#FEF3C7', '#B45309'],
-      rejected: ['#FEE2E2', '#EF4444'],
-    };
+  renderTaskCardHtml(r) {
+    const [bg, fg] = getRecordStatusTone(r.status);
+    const label = getRecordStatusLabel(r.status);
+    const title = r.mapping_title || `${r.title} Mapping`;
+    const canUndo = canUndoRecord(r);
+    const copyIcon =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    const undoIcon =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 14 4 9l5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-7a4 4 0 00-4-4H4" stroke-linecap="round"/></svg>';
 
-    const filtered =
-      state.taskFilter === 'all'
-        ? state.records
-        : state.records.filter((r) => r.status === state.taskFilter);
+    return `<article class="task-media-card" onclick="App.openTaskDetail('${r.task_id}')">
+      <div class="task-media-card-top">
+        <div class="task-media-thumb task-media-thumb--${r.thumb || 'street'}"></div>
+        <span class="task-media-meta-pill">${r.duration} | ${r.size}</span>
+        <div class="task-media-actions">
+          <button type="button" class="task-media-action" onclick="event.stopPropagation();App.copyTicketId('${r.ticket_id || r.task_id}')" aria-label="Copy">${copyIcon}</button>
+          ${canUndo ? `<button type="button" class="task-media-action" onclick="event.stopPropagation();App.promptUndo('${r.task_id}')" aria-label="Undo">${undoIcon}</button>` : ''}
+        </div>
+      </div>
+      <div class="task-media-card-body">
+        <div class="task-media-card-head">
+          <h4>${title}</h4>
+          <span class="status-badge status-badge--${getRecordStatusClass(r.status)}" style="background:${bg};color:${fg}">${label}</span>
+        </div>
+        <p class="task-media-time">${formatRecordDate(r.shot_at)}</p>
+      </div>
+    </article>`;
+  },
 
-    document.getElementById('task-list').innerHTML = filtered
-      .map((r) => {
-        const [bg, fg] = tones[r.status] || ['#F1F5F9', '#64748B'];
-        const time = new Date(r.shot_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `<div class="task-card" onclick="App.onTaskCardClick('${r.task_id}','${r.status}')">
-          <div class="thumb"></div>
-          <div class="task-body">
-            <div class="task-head">
-              <h4>${r.title}</h4>
-              <span class="status-badge" style="background:${bg};color:${fg}">${r.status}</span>
-            </div>
-            <div class="task-meta">${time} · ${r.duration} · ${r.size}</div>
-            <div class="task-meta">${r.sector}</div>
-          </div>
-          <button class="menu-btn" onclick="event.stopPropagation();App.openCardMenu(event,'${r.task_id}','${r.status}')">⋯</button>
-        </div>`;
+  refreshTaskList() {
+    App.renderTaskList();
+    toast('Refreshed');
+  },
+
+  openTaskDetail(taskId) {
+    state.selectedRecordId = taskId;
+    App.go('task-detail');
+  },
+
+  renderTaskDetail() {
+    const el = document.getElementById('task-detail-body');
+    const r = state.records.find((x) => x.task_id === state.selectedRecordId);
+    if (!r) {
+      el.innerHTML = '<div class="task-empty">Task not found.</div>';
+      return;
+    }
+
+    const steps = getAuditSteps(r);
+    const tags = (r.tags || [])
+      .map((tag) => `<span class="task-detail-tag">${tag}</span>`)
+      .join('');
+    const canUndo = canUndoRecord(r);
+
+    const stepper = steps
+      .map((step, index) => {
+        const block =
+          `<div class="audit-step audit-step--${step.state}">` +
+          `<div class="audit-step-dot">${step.state === 'done' ? '✓' : step.state === 'current' ? '●' : ''}</div>` +
+          `<span>${step.label}</span></div>`;
+        if (index < steps.length - 1) return block + '<div class="audit-step-line"></div>';
+        return block;
       })
       .join('');
+
+    el.innerHTML = `
+      <section class="audit-progress">
+        <div class="audit-progress-label">AUDIT PROGRESS</div>
+        <div class="audit-steps">${stepper}</div>
+      </section>
+      <section class="ticket-row">
+        <div class="ticket-id">
+          <strong>${r.ticket_id || r.task_id}</strong>
+          <button type="button" class="ticket-copy" onclick="App.copyTicketId('${r.ticket_id || r.task_id}')" aria-label="Copy ID">⎘</button>
+        </div>
+        <button type="button" class="ticket-bell" aria-label="Notifications">🔔</button>
+      </section>
+      <section class="task-detail-info">
+        <h3 class="task-detail-title">${r.mapping_title || `${r.title} Mapping`}</h3>
+        <div class="task-detail-tags">${tags}</div>
+        <p class="task-detail-address">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7Z" fill="#1a66ff"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg>
+          ${r.address || r.sector}
+        </p>
+      </section>
+      <div class="task-detail-preview task-media-thumb--${r.thumb || 'street'}"></div>
+      ${
+        canUndo
+          ? `<button type="button" class="btn btn-outline task-detail-undo" onclick="App.promptUndo('${r.task_id}')">Undo submission</button>`
+          : ''
+      }
+    `;
+  },
+
+  copyTicketId(id) {
+    navigator.clipboard?.writeText(id);
+    toast('Copied ID');
+  },
+
+  promptUndo(taskId) {
+    state.undoTaskId = taskId;
+    document.getElementById('modal-undo').classList.add('show');
+    document.getElementById('undo-confirm-btn').onclick = () => App.confirmUndo();
+  },
+
+  openTaskStatusFilter() {
+    const options = [
+      { id: 'all', label: 'ALL' },
+      { id: 'pending', label: 'Pending' },
+      { id: 'approved', label: 'Approved' },
+      { id: 'rejected', label: 'Rejected' },
+    ];
+    document.getElementById('task-status-options').innerHTML = options
+      .map(
+        (opt) =>
+          `<button type="button" class="task-status-option ${state.taskStatusFilter === opt.id ? 'is-active' : ''}" onclick="App.setTaskStatusFilter('${opt.id}')">${opt.label}</button>`
+      )
+      .join('');
+    document.getElementById('modal-task-status').classList.add('show');
+  },
+
+  setTaskStatusFilter(id) {
+    state.taskStatusFilter = id;
+    App.closeModal('modal-task-status');
+    App.renderTaskList();
+  },
+
+  openTaskDateFilter() {
+    renderTaskDateCalendar();
+    App.syncTaskDatePresets();
+    document.getElementById('modal-task-date').classList.add('show');
+  },
+
+  syncTaskDatePresets() {
+    document.querySelectorAll('.date-preset-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.preset === state.taskDatePreset && !state.taskDateSelected);
+    });
+  },
+
+  selectTaskDate(iso) {
+    state.taskDateSelected = iso;
+    state.taskDatePreset = 'custom';
+    state.taskDateLabel = new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    renderTaskDateCalendar();
+    App.syncTaskDatePresets();
+    App.renderTaskList();
+  },
+
+  applyTaskDatePreset(preset) {
+    const labels = {
+      all: 'Date',
+      today: 'Today',
+      week: 'This week',
+      last7: 'Last 7 days',
+      month: 'This month',
+    };
+    state.taskDateSelected = null;
+    state.taskDatePreset = preset === 'last7' ? 'last7' : preset;
+    state.taskDateLabel = labels[preset] || 'Date';
+    App.syncTaskDatePresets();
+    renderTaskDateCalendar();
+    App.renderTaskList();
+    App.closeModal('modal-task-date');
   },
 
   setTaskFilter(id) {
     state.taskFilter = id;
+    state.taskStatusFilter = id === 'all' ? 'all' : id;
     App.renderTaskList();
   },
 
-  onTaskCardClick(taskId, status) {
-    if (status === 'claimed') App.go('map');
+  onTaskCardClick(taskId) {
+    App.openTaskDetail(taskId);
   },
 
   openCardMenu(event, taskId, status) {
     const dd = document.getElementById('card-dropdown');
-    const canUndo = status === 'pending' || status === 'reviewing';
+    const canUndo = canUndoRecord({ status });
     dd.innerHTML = `<div class="dropdown-item danger ${canUndo ? '' : 'disabled'}" id="undo-item">Undo</div>`;
     const rect = event.target.getBoundingClientRect();
     dd.style.top = `${rect.bottom + 4}px`;
@@ -907,9 +1769,7 @@ const App = {
     if (canUndo) {
       document.getElementById('undo-item').onclick = () => {
         dd.classList.remove('show');
-        state.undoTaskId = taskId;
-        document.getElementById('modal-undo').classList.add('show');
-        document.getElementById('undo-confirm-btn').onclick = () => App.confirmUndo();
+        App.promptUndo(taskId);
       };
     }
     setTimeout(() => {
@@ -918,13 +1778,14 @@ const App = {
   },
 
   confirmUndo() {
-    const r = state.records.find((x) => x.task_id === state.undoTaskId);
-    if (r && (r.status === 'pending' || r.status === 'reviewing')) {
-      r.status = 'claimed';
-      toast('Upload withdrawn — task is Claimed again');
+    const idx = state.records.findIndex((x) => x.task_id === state.undoTaskId);
+    if (idx >= 0 && canUndoRecord(state.records[idx])) {
+      state.records.splice(idx, 1);
+      toastSuccess('Deleted successful');
     }
     App.closeModal('modal-undo');
     App.renderTaskList();
+    if (state.screen === 'task-detail') App.go('tasks');
   },
 
   renderSettlementPanel() {
@@ -982,10 +1843,9 @@ document.addEventListener('click', (e) => {
 window.toast = toast;
 window.App = App;
 App.initLoginForm();
-App.renderPrecheck();
 
 if (new URLSearchParams(location.search).get('demo') === 'map') {
   state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
-  state.preconditions = { bluetooth: true, network: true };
+  state.preconditions = { bluetooth: true, network: true, gps: true };
   App.go('map');
 }

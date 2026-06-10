@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260609g" />
+    <link rel="stylesheet" href="styles.css?v=20260610a" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -84,22 +84,130 @@
 
       <!-- PRE-CHECK -->
       <div class="screen" id="screen-precheck">
-        <div class="blue-header">
-          <button class="header-icon" onclick="App.go('login')">←</button>
-          <span>Pre-check</span>
-          <button class="header-icon" onclick="App.refreshPrecheck()">↻</button>
-        </div>
-        <div class="info-banner">
-          Verify GPS, Bluetooth, network, and storage before connecting your GoPro and starting
-          road test tasks.
-        </div>
-        <div class="scroll precheck-body">
-          <div class="check-list" id="check-list"></div>
-        </div>
-        <div class="sticky-footer">
-          <button class="btn btn-primary" id="btn-start-check" onclick="App.startCheck()">
-            Start check
-          </button>
+        <div class="precheck-wrap map-wrap">
+          <div class="map-top-chrome precheck-chrome">
+            <div class="map-top-left"></div>
+            <button class="profile-fab" type="button" aria-label="Profile">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+              </svg>
+            </button>
+          </div>
+          <div id="precheck-map"></div>
+          <div class="map-rail precheck-rail">
+            <button class="rail-btn" type="button" aria-label="Filter" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button class="rail-btn" type="button" aria-label="History" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
+                <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M12 7v5l3 2" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="precheck-overlay" id="precheck-overlay">
+            <!-- Step 1: Location permission -->
+            <div class="precheck-step show" id="precheck-step-location">
+              <div class="ios-location-alert">
+                <h3 class="ios-alert-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
+                <p class="ios-alert-body">
+                  Your precise location is used to show your position on the map, get directions, estimate
+                  travel times and improve search results
+                </p>
+                <div class="ios-map-preview">
+                  <div class="ios-precise-pill">
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                      <path d="M8 1.5a5 5 0 015 5c0 3.5-5 8.5-5 8.5S3 10 3 6.5a5 5 0 015-5Z" fill="currentColor"/>
+                      <circle cx="8" cy="6.5" r="1.6" fill="#fff"/>
+                    </svg>
+                    Precise: On
+                  </div>
+                  <span class="ios-map-dot" aria-hidden="true"></span>
+                </div>
+                <div class="ios-alert-actions">
+                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('once')">Allow Once</button>
+                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('while')">Allow While Using the App</button>
+                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('deny')">Don&rsquo;t Allow</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Bluetooth -->
+            <div class="precheck-step" id="precheck-step-bluetooth">
+              <div class="precheck-card">
+                <div class="precheck-icon-wrap bluetooth">
+                  <div class="precheck-icon-inner">
+                    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                      <path d="M8 7l8 5-8 5V7zm0 10v3l8-5.5-8-5.5v3z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                </div>
+                <h3 class="precheck-card-title">Bluetooth Connection</h3>
+                <p class="precheck-card-body">
+                  Due to system restrictions, the device connection requires enabling Bluetooth permission.
+                </p>
+                <div class="precheck-card-actions">
+                  <button type="button" class="btn btn-secondary precheck-btn" onclick="App.precheckBluetoothSkip()">Skip</button>
+                  <button type="button" class="btn btn-primary precheck-btn" onclick="App.precheckBluetoothNext()">Next</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Connecting -->
+            <div class="precheck-step" id="precheck-step-connecting">
+              <div class="precheck-card">
+                <div class="gopro-connect-visual">
+                  <svg class="gopro-device" viewBox="0 0 32 48" aria-hidden="true">
+                    <rect x="6" y="2" width="20" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="16" cy="38" r="2" fill="currentColor"/>
+                  </svg>
+                  <svg class="gopro-pulse" viewBox="0 0 120 32" aria-hidden="true">
+                    <path d="M2 16 H28 L34 8 L40 24 L46 16 H118" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <svg class="gopro-camera" viewBox="0 0 48 36" aria-hidden="true">
+                    <rect x="2" y="8" width="44" height="24" rx="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="24" cy="20" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <rect x="34" y="4" width="8" height="6" rx="2" fill="currentColor"/>
+                  </svg>
+                </div>
+                <h3 class="precheck-card-title">Connect To The Gopro...</h3>
+                <p class="precheck-card-body">Connecting GoPro. Please wait patiently.</p>
+              </div>
+            </div>
+
+            <!-- Step 4: GoPro selection -->
+            <div class="precheck-step" id="precheck-step-select">
+              <div class="precheck-card gopro-select-card">
+                <h3 class="gopro-select-title">GoPro</h3>
+                <div class="gopro-list" id="gopro-list">
+                  <label class="gopro-option selected">
+                    <input type="radio" name="gopro" value="GoPro_1" checked onchange="App.precheckSelectGopro(this.value)" />
+                    <span class="gopro-radio" aria-hidden="true"></span>
+                    <span>GoPro_1</span>
+                  </label>
+                  <label class="gopro-option">
+                    <input type="radio" name="gopro" value="GoPro_2" onchange="App.precheckSelectGopro(this.value)" />
+                    <span class="gopro-radio" aria-hidden="true"></span>
+                    <span>GoPro_2</span>
+                  </label>
+                  <label class="gopro-option">
+                    <input type="radio" name="gopro" value="GoPro_3" onchange="App.precheckSelectGopro(this.value)" />
+                    <span class="gopro-radio" aria-hidden="true"></span>
+                    <span>GoPro_3</span>
+                  </label>
+                </div>
+                <div class="precheck-card-actions">
+                  <button type="button" class="btn btn-secondary precheck-btn" onclick="App.precheckGoproClose()">Close</button>
+                  <button type="button" class="btn btn-primary precheck-btn" onclick="App.precheckGoproOk()">OK</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -108,29 +216,47 @@
         <div class="map-wrap">
           <div class="map-top-chrome" id="map-top-chrome">
             <div class="map-top-left">
-              <span class="map-cam-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <circle cx="12" cy="12" r="9" />
-                  <circle cx="12" cy="12" r="3.5" />
-                </svg>
-              </span>
-              <div class="device-pill" id="device-pill">
-                <span class="device-dot" id="device-dot"></span>
-                <span class="device-conn" id="device-conn">CONN</span>
-                <span class="device-signal" aria-hidden="true">
-                  <svg viewBox="0 0 16 12" fill="currentColor">
-                    <rect x="0" y="8" width="2.5" height="4" rx="0.5" />
-                    <rect x="4" y="5" width="2.5" height="7" rx="0.5" />
-                    <rect x="8" y="2" width="2.5" height="10" rx="0.5" />
-                    <rect x="12" y="0" width="2.5" height="12" rx="0.5" />
-                  </svg>
-                </span>
-                <span class="device-batt" id="device-batt">98</span>
-                <span class="device-sd" aria-hidden="true">
-                  <svg viewBox="0 0 14 16" fill="currentColor">
-                    <path d="M1 2h8l4 4v10H1V2zm6 0v4h4" opacity="0.9" />
-                  </svg>
-                </span>
+              <div class="device-status-bar" id="device-status-bar">
+                <button
+                  type="button"
+                  class="device-lens-btn"
+                  id="device-lens-btn"
+                  onclick="App.toggleStatusBar()"
+                  aria-label="Toggle device status bar"
+                  aria-expanded="true"
+                >
+                  <span class="device-lens" aria-hidden="true">
+                    <span class="device-lens-blue"></span>
+                    <span class="device-lens-white"></span>
+                    <span class="device-lens-core">
+                      <span class="device-lens-shine"></span>
+                    </span>
+                  </span>
+                </button>
+                <div class="device-status-body" id="device-status-body">
+                  <span class="device-dot err" id="device-dot"></span>
+                  <span class="device-conn" id="device-conn">DISCONNECTED</span>
+                  <span class="device-divider" aria-hidden="true"></span>
+                  <span class="device-batt-wrap low" id="device-batt-wrap">
+                    <span class="device-batt-icon" aria-hidden="true">
+                      <span class="device-batt-level" id="device-batt-level">
+                        <span class="device-batt" id="device-batt">14</span>
+                      </span>
+                      <span class="device-batt-bolt" id="device-batt-bolt" aria-hidden="true">
+                        <svg viewBox="0 0 10 14" width="7" height="10"><path d="M6 0 2 8h3l-1 6 5-9H6l1-5z" fill="currentColor"/></svg>
+                      </span>
+                    </span>
+                  </span>
+                  <span class="device-divider" aria-hidden="true"></span>
+                  <span class="device-signal" id="device-signal" data-level="2" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </span>
+                  <span class="device-divider" aria-hidden="true"></span>
+                  <span class="device-sd-stack" aria-hidden="true">
+                    <span class="device-sd-chip"></span>
+                    <span class="device-sd-chip"></span>
+                  </span>
+                </div>
               </div>
             </div>
             <button class="profile-fab" onclick="App.go('settings')" aria-label="Profile">
@@ -147,7 +273,16 @@
           </div>
           <div class="speed-pill hidden" id="speed-pill">
             <span class="speed-limit">25</span>
-            <span class="speed-dist">1.8 km/h</span>
+            <span class="speed-dist">1.8 km</span>
+          </div>
+          <div class="map-alert hidden" id="map-alert">
+            <span class="map-alert-text">Run Out Of Memory</span>
+            <button type="button" class="map-alert-close" onclick="App.dismissMapAlert()" aria-label="Dismiss">×</button>
+          </div>
+          <div class="map-float-actions hidden" id="map-float-actions">
+            <button type="button" class="map-float-btn" onclick="App.exitCapture()">Close</button>
+            <button type="button" class="map-float-btn map-float-rest hidden" id="map-float-rest" onclick="toast('Rest break started')">Rest</button>
+            <button type="button" class="map-float-btn" id="map-float-over" onclick="App.toggleCaptureRest()">Over</button>
           </div>
           <div class="map-rail" id="map-rail">
             <button class="rail-btn" onclick="App.openFilterSheet()" aria-label="Filter">
@@ -174,31 +309,15 @@
             </button>
           </div>
 
-          <!-- Record ready (big red button) -->
-          <div class="record-ready hidden" id="record-ready">
-            <button class="record-fab" onclick="App.tapRecord()" aria-label="Start recording"></button>
-            <p>Drive the route — capture in progress</p>
-          </div>
-
-          <!-- Active recording panel -->
-          <div class="recording-panel hidden" id="recording-panel">
-            <div class="rec-location" id="rec-location">Sorrento Valley</div>
-            <div class="rec-timer-row">
-              <span class="rec-dot"></span>
-              <span id="rec-time">0:00</span>
+          <!-- Active capture (navigate / record / complete) -->
+          <div class="capture-sheet hidden" id="capture-sheet">
+            <h2 class="capture-title" id="capture-title">Sorrento Valley</h2>
+            <div class="capture-timer-row">
+              <span class="capture-dot" id="capture-dot"></span>
+              <span class="capture-time" id="capture-time">0:00</span>
             </div>
-            <div class="rec-waveform" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span><span></span>
-            </div>
-            <p class="rec-hint">Drive the route — capture in progress</p>
-          </div>
-
-          <!-- Drive controls: stop | timer | complete -->
-          <div class="drive-bar hidden" id="drive-bar">
-            <button class="drive-stop" id="drive-stop" onclick="App.stopRecording()"></button>
-            <span class="drive-timer" id="drive-timer">0:00</span>
-            <button class="drive-done hidden" id="drive-done" onclick="App.completeTask()">✓</button>
+            <div class="capture-controls" id="capture-controls"></div>
+            <p class="capture-hint">Drive the route — capture in progress</p>
           </div>
         </div>
         <div class="sheet hidden" id="task-sheet"></div>
@@ -206,18 +325,35 @@
 
       <!-- TASKS -->
       <div class="screen" id="screen-tasks">
-        <div class="back-header">
-          <button class="icon-btn" onclick="App.go('map')">←</button>
-          <h2>Tasks</h2>
+        <div class="tasks-header">
+          <button type="button" class="icon-btn" onclick="App.go('map')" aria-label="Back">←</button>
+          <h2>Task</h2>
+          <button type="button" class="icon-btn" onclick="App.refreshTaskList()" aria-label="Refresh">↻</button>
         </div>
         <div class="tasks-summary" id="tasks-summary"></div>
-        <div class="filter-row" id="task-filters"></div>
+        <div class="tasks-filter-row">
+          <button type="button" class="tasks-filter-btn" id="task-date-filter-btn" onclick="App.openTaskDateFilter()">
+            <span id="task-date-filter-label">Date</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="tasks-filter-btn" id="task-status-filter-btn" onclick="App.openTaskStatusFilter()">
+            <span id="task-status-filter-label">Status</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
         <div class="scroll">
-          <div class="settlement-entry">
-            <button class="btn btn-outline" onclick="App.go('progress-map')">Settlement Map</button>
-          </div>
           <div class="task-list" id="task-list"></div>
         </div>
+      </div>
+
+      <!-- TASK DETAIL -->
+      <div class="screen" id="screen-task-detail">
+        <div class="tasks-header">
+          <button type="button" class="icon-btn" onclick="App.go('tasks')" aria-label="Back">←</button>
+          <h2>Task Details</h2>
+          <button type="button" class="icon-btn" onclick="App.renderTaskDetail()" aria-label="Refresh">↻</button>
+        </div>
+        <div class="scroll" id="task-detail-body"></div>
       </div>
 
       <!-- SETTLEMENT MAP -->
@@ -243,63 +379,147 @@
 
       <!-- SETTINGS -->
       <div class="screen" id="screen-settings">
-        <div class="settings-hero">
-          <button class="header-icon light" onclick="App.go('map')">←</button>
-          <div class="profile-hero">
-            <div class="avatar lg">US</div>
-            <div>
-              <strong class="profile-name" id="settings-user-id">US-156</strong>
-              <div class="profile-id" id="settings-profile-id">ID · US-156</div>
+        <div class="settings-header">
+          <button type="button" class="icon-btn" onclick="App.go('map')" aria-label="Back">←</button>
+          <h2>Setting</h2>
+          <button type="button" class="icon-btn" onclick="App.refreshSettings()" aria-label="Refresh">↻</button>
+        </div>
+        <div class="scroll settings-scroll">
+          <div class="settings-profile-card">
+            <div class="settings-avatar-wrap">
+              <div class="settings-avatar" aria-hidden="true"></div>
+              <button type="button" class="settings-avatar-edit" aria-label="Edit profile">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4Z" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <strong class="settings-user-name" id="settings-user-id">US-156</strong>
+            <p class="settings-rank">Regional King</p>
+            <div class="settings-badges">
+              <span class="settings-badge settings-badge--blue">Star of Honor</span>
+              <span class="settings-badge settings-badge--gold">Star of Honor</span>
+              <span class="settings-badge settings-badge--green">2nd Anniversary</span>
             </div>
           </div>
-        </div>
-        <div class="scroll settings">
-          <div class="section-title">System configuration</div>
+
+          <h3 class="settings-section-title">System Configuration</h3>
           <div class="settings-group">
             <div class="settings-row" onclick="App.go('precheck')">
-              <span class="row-left"><span class="row-icon">📷</span>Device</span>
-              <span class="muted">GoPro HERO ›</span>
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4" stroke-linecap="round"/></svg>
+                </span>
+                Device
+              </span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
             </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🌐</span>Language</span>
-              <span class="muted">English ›</span>
+            <div class="settings-row" onclick="toast('Network settings')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.5a14 14 0 0114 0"/><path d="M8.5 16a9 9 0 017 0"/><path d="M12 20h.01" stroke-linecap="round"/></svg>
+                </span>
+                Network
+              </span>
+              <span class="settings-row-value">Starbucks_WiFi <span class="settings-row-chevron">›</span></span>
             </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🕐</span>Time zone</span>
-              <span class="muted">UTC-8 ›</span>
+            <div class="settings-row" onclick="App.go('version')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                Version
+              </span>
+              <span class="settings-row-value">v4.12.0-stable <span class="settings-row-chevron">›</span></span>
             </div>
           </div>
-          <div class="section-title">Support & feedback</div>
+
+          <h3 class="settings-section-title">Support & Feedback</h3>
           <div class="settings-group">
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">❓</span>Help center</span>
-              <span class="muted">›</span>
+            <div class="settings-row" onclick="toast('Safe Support')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2" stroke-linecap="round"/></svg>
+                </span>
+                Safe Support
+              </span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
             </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">✉️</span>Contact us</span>
-              <span class="muted">›</span>
+            <div class="settings-row" onclick="toast('Knowledge Base')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                </span>
+                Knowledge Base
+              </span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
             </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">⚠️</span>Report a problem</span>
-              <span class="muted">›</span>
+            <div class="settings-row" onclick="toast('Send Feedback')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/></svg>
+                </span>
+                Send Feedback
+              </span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
+            </div>
+            <div class="settings-row settings-row--toggle">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                </span>
+                Auto-Position
+              </span>
+              <label class="toggle"><input type="checkbox" id="toggle-auto-position" checked onchange="App.onAutoPositionToggle(this.checked)" /><span></span></label>
             </div>
           </div>
-          <div class="section-title">Privacy & security</div>
+
+          <h3 class="settings-section-title">Privacy & Security</h3>
           <div class="settings-group">
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🔔</span>Push notifications</span>
-              <label class="toggle"><input type="checkbox" checked /><span></span></label>
-            </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🔒</span>Password</span>
-              <span class="muted">›</span>
-            </div>
-            <div class="settings-row">
-              <span class="row-left"><span class="row-icon">🛡️</span>Two-factor auth</span>
-              <span class="muted">Off ›</span>
+            <div class="settings-row" onclick="toast('Urgent Contact')">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.5 2.7a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.5-1.5a2 2 0 012.1-.5c.9.2 1.8.4 2.7.5A2 2 0 0122 14.9v2Z"/></svg>
+                </span>
+                Urgent Contact
+              </span>
+              <span class="settings-row-value">Call Up <span class="settings-row-chevron">›</span></span>
             </div>
           </div>
-          <button class="logout-btn" onclick="App.openLogoutModal()">Log out</button>
+
+          <div class="settings-group">
+            <div class="settings-row settings-row--logout" onclick="App.openLogoutModal()">
+              <span class="settings-row-left">
+                <span class="settings-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9" stroke-linecap="round"/></svg>
+                </span>
+                Log out
+              </span>
+            </div>
+          </div>
+
+          <p class="settings-footer">- GoSnap Version 4.12.0 -</p>
+        </div>
+      </div>
+
+      <!-- VERSION -->
+      <div class="screen" id="screen-version">
+        <div class="settings-header">
+          <button type="button" class="icon-btn" onclick="App.go('settings')" aria-label="Back">←</button>
+          <h2>Version</h2>
+          <button type="button" class="icon-btn" onclick="App.refreshVersion()" aria-label="Refresh">↻</button>
+        </div>
+        <div class="scroll settings-scroll version-scroll">
+          <div class="version-hero">
+            <img class="version-app-icon" src="assets/app-icon.png" width="88" height="88" alt="GoSnap" />
+            <h3 class="version-app-name">GoSnap</h3>
+            <p class="version-number">v4.12.0-stable</p>
+            <p class="version-latest">This is the latest version</p>
+          </div>
+          <div class="settings-group">
+            <div class="settings-row settings-row--toggle">
+              <span class="settings-row-left">Auto Updates</span>
+              <label class="toggle"><input type="checkbox" id="toggle-auto-updates" checked onchange="App.onAutoUpdatesToggle(this.checked)" /><span></span></label>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -353,12 +573,13 @@
 
     <div class="overlay overlay-sheet" id="modal-precondition">
       <div class="bottom-sheet precondition-sheet">
+        <div class="sheet-handle"></div>
         <div class="sheet-top">
           <strong>Precondition</strong>
-          <button class="sheet-close" onclick="App.closeModal('modal-precondition')">×</button>
+          <button type="button" class="sheet-close" onclick="App.closeModal('modal-precondition')" aria-label="Close">×</button>
         </div>
-        <div id="precondition-rows"></div>
-        <button class="btn btn-primary" id="btn-precondition-go" onclick="App.preconditionGo()">Go</button>
+        <div id="precondition-rows" class="precondition-list"></div>
+        <button type="button" class="btn btn-go" id="btn-precondition-go" onclick="App.preconditionGo()">Go</button>
       </div>
     </div>
 
@@ -379,20 +600,48 @@
     </div>
 
     <div class="overlay" id="modal-logout">
-      <div class="modal">
-        <h3>Do you want to sign out?</h3>
-        <p>You'll need to sign in again to access your tasks.</p>
-        <button class="btn btn-danger" onclick="App.logout()">Sign out</button>
-        <button class="btn btn-ghost" onclick="App.closeModal('modal-logout')">Cancel</button>
+      <div class="modal modal-logout">
+        <h3>Do you want to log out now?</h3>
+        <p class="modal-logout-user" id="logout-user-id">US-156</p>
+        <div class="modal-logout-actions">
+          <button type="button" class="modal-logout-btn" onclick="App.closeModal('modal-logout')">Cancel</button>
+          <button type="button" class="modal-logout-btn modal-logout-btn--confirm" onclick="App.logout()">Confirm</button>
+        </div>
       </div>
     </div>
 
     <div class="overlay" id="modal-undo">
-      <div class="modal">
-        <h3>Undo submission</h3>
-        <p>Withdraw this upload and return the task to Claimed?</p>
-        <button class="btn btn-danger" id="undo-confirm-btn">Undo</button>
-        <button class="btn btn-ghost" onclick="App.closeModal('modal-undo')">Cancel</button>
+      <div class="modal modal-confirm">
+        <h3>Do you want to Undo?</h3>
+        <div class="modal-confirm-actions">
+          <button type="button" class="btn btn-ghost" onclick="App.closeModal('modal-undo')">Cancel</button>
+          <button type="button" class="btn btn-primary" id="undo-confirm-btn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-task-status">
+      <div class="bottom-sheet task-status-sheet">
+        <div class="sheet-handle"></div>
+        <div class="task-status-options" id="task-status-options"></div>
+        <button type="button" class="btn btn-ghost task-status-cancel" onclick="App.closeModal('modal-task-status')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-sheet" id="modal-task-date">
+      <div class="bottom-sheet task-date-sheet">
+        <div class="sheet-handle"></div>
+        <div class="task-date-head">
+          <strong>Select Date Range</strong>
+          <button type="button" class="sheet-close" onclick="App.closeModal('modal-task-date')" aria-label="Close">×</button>
+        </div>
+        <div class="task-date-scroll" id="task-date-calendar"></div>
+        <div class="modal-date-presets">
+          <button type="button" class="date-preset-btn" data-preset="today" onclick="App.applyTaskDatePreset('today')">Today</button>
+          <button type="button" class="date-preset-btn" data-preset="week" onclick="App.applyTaskDatePreset('week')">This week</button>
+          <button type="button" class="date-preset-btn" data-preset="last7" onclick="App.applyTaskDatePreset('last7')">Last 7 days</button>
+          <button type="button" class="date-preset-btn" data-preset="month" onclick="App.applyTaskDatePreset('month')">This month</button>
+        </div>
       </div>
     </div>
 
@@ -420,6 +669,5 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260609e"></script>
-  </body>
+    <script src="app.js?v=20260610a"></script>  </body>
 </html>
