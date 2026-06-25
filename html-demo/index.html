@@ -14,12 +14,29 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260610a" />
+    <link rel="stylesheet" href="styles.css?v=20260625u" />
   </head>
   <body>
     <div class="phone" id="app">
+      <!-- SPLASH -->
+      <div class="screen splash-screen active" id="screen-splash">
+        <div class="splash-body">
+          <div class="splash-icon-wrap">
+            <img class="splash-icon" src="assets/app-icon.png" alt="GoSnap" width="120" height="120" />
+          </div>
+          <h1 class="splash-title">GO SNAP</h1>
+          <p class="splash-slogan">DISCOVER THE GOOD LIFE</p>
+          <div class="splash-loading">
+            <p class="splash-status" id="splash-status">STARTING...</p>
+            <div class="splash-progress" aria-hidden="true">
+              <span class="splash-progress-bar" id="splash-progress-bar"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- LOGIN -->
-      <div class="screen login-screen active" id="screen-login">
+      <div class="screen login-screen" id="screen-login">
         <div class="login-hero">
           <div class="login-grid" aria-hidden="true"></div>
           <div class="login-dots" aria-hidden="true"></div>
@@ -35,32 +52,33 @@
             <div class="login-app-icon" aria-hidden="true">
               <img src="assets/app-icon.png?v=4" alt="" width="108" height="108" />
             </div>
-            <div class="login-tagline">
-              <span class="login-tagline-icon" aria-hidden="true">✦</span>
-              Discover the good life
-            </div>
+            <h1 class="login-title">GO SNAP</h1>
+            <p class="login-slogan">DISCOVER THE GOOD LIFE</p>
           </div>
         </div>
         <div class="login-card" id="login-form">
           <div class="login-field">
-            <label for="login-region">Region Selection</label>
+            <label for="login-region">Region</label>
             <div class="login-input-wrap is-empty" id="login-region-wrap">
-              <span class="login-input-icon" aria-hidden="true">
+              <span class="login-input-icon login-input-icon--globe" id="region-globe" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>
               </span>
-              <select id="login-region" aria-label="Region Selection" onchange="App.onRegionChange()">
+              <span class="login-region-flag hidden" id="region-flag" aria-hidden="true"></span>
+              <select id="login-region" aria-label="Region" onchange="App.onRegionChange()" onfocus="App.onRegionFocus(true)" onblur="App.onRegionFocus(false)">
                 <option value="">Country</option>
               </select>
+              <button type="button" class="login-clear hidden" id="region-clear" onclick="App.clearRegion()" aria-label="Clear region">×</button>
               <span class="login-valid hidden" id="region-check" aria-hidden="true">✓</span>
+              <span class="login-region-help hidden" id="region-help" aria-hidden="true">?</span>
             </div>
           </div>
           <div class="login-field">
-            <label for="login-user">User Login</label>
+            <label for="login-user">Username</label>
             <div class="login-input-wrap" id="login-user-wrap">
               <span class="login-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               </span>
-              <input id="login-user" placeholder="User Wang" autocomplete="username" oninput="this.dataset.edited='1'; App.clearLoginError()" />
+              <input id="login-user" placeholder="Name" autocomplete="username" oninput="this.dataset.edited='1'; App.clearLoginError()" onfocus="App.onUserFocus(true)" onblur="App.onUserFocus(false)" />
             </div>
           </div>
           <div class="login-field">
@@ -77,143 +95,209 @@
             </div>
           </div>
           <p class="login-error hidden" id="login-error">Invalid region, user ID, or password.</p>
-          <button class="btn btn-primary login-submit" type="button" onclick="App.login()">Sign In</button>
+          <button class="btn btn-primary login-submit" type="button" onclick="event.stopPropagation(); App.login()">Sign In</button>
         </div>
         <div class="login-home-indicator" aria-hidden="true"></div>
       </div>
 
-      <!-- PRE-CHECK -->
+      <!-- CONFIGURE DEVICE (onboarding) -->
       <div class="screen" id="screen-precheck">
-        <div class="precheck-wrap map-wrap">
-          <div class="map-top-chrome precheck-chrome">
-            <div class="map-top-left"></div>
-            <button class="profile-fab" type="button" aria-label="Profile">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-              </svg>
-            </button>
+        <div class="configure-top">
+          <div class="configure-header">
+            <button type="button" class="header-icon configure-header-icon" onclick="App.precheckBack()" aria-label="Back">←</button>
+            <h2 class="configure-title">Configure Device</h2>
+            <button type="button" class="header-icon configure-header-icon" onclick="App.refreshPrecheck()" aria-label="Refresh">↻</button>
           </div>
-          <div id="precheck-map"></div>
-          <div class="map-rail precheck-rail">
-            <button class="rail-btn" type="button" aria-label="Filter" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
-              </svg>
-            </button>
-            <button class="rail-btn" type="button" aria-label="History" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
-                <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M12 7v5l3 2" stroke-linecap="round" />
-              </svg>
-            </button>
+          <div class="configure-progress" aria-hidden="true">
+            <span class="configure-progress-bar" id="configure-progress-bar"></span>
           </div>
+        </div>
 
-          <div class="precheck-overlay" id="precheck-overlay">
-            <!-- Step 1: Location permission -->
-            <div class="precheck-step show" id="precheck-step-location">
-              <div class="ios-location-alert">
-                <h3 class="ios-alert-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
-                <p class="ios-alert-body">
-                  Your precise location is used to show your position on the map, get directions, estimate
-                  travel times and improve search results
-                </p>
-                <div class="ios-map-preview">
-                  <div class="ios-precise-pill">
-                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                      <path d="M8 1.5a5 5 0 015 5c0 3.5-5 8.5-5 8.5S3 10 3 6.5a5 5 0 015-5Z" fill="currentColor"/>
-                      <circle cx="8" cy="6.5" r="1.6" fill="#fff"/>
-                    </svg>
-                    Precise: On
+        <div class="precheck-body" id="precheck-body">
+          <!-- Step 1: map background + iOS location alert (must tap to continue) -->
+          <div class="precheck-page" id="precheck-step-location">
+            <div class="precheck-location-stage">
+              <div id="precheck-map" class="precheck-map"></div>
+              <div class="precheck-map-scrim" aria-hidden="true"></div>
+              <div class="precheck-location-sheet">
+                <div
+                  class="ios-location-alert configure-location-alert precheck-location-alert is-locked"
+                  id="precheck-location-alert"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="precheck-location-title"
+                  onclick="event.stopPropagation()"
+                >
+                  <h3 class="ios-alert-title" id="precheck-location-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
+                  <p class="ios-alert-body">
+                    Your precise location is used to show your position on the map, record routes accurately,
+                    and verify you are at the task start point before recording.
+                  </p>
+                  <div class="ios-map-preview">
+                    <div class="ios-precise-pill">
+                      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                        <path d="M8 1.5a5 5 0 015 5c0 3.5-5 8.5-5 8.5S3 10 3 6.5a5 5 0 015-5Z" fill="currentColor"/>
+                        <circle cx="8" cy="6.5" r="1.6" fill="#fff"/>
+                      </svg>
+                      Precise: On
+                    </div>
+                    <span class="ios-map-dot" aria-hidden="true"></span>
                   </div>
-                  <span class="ios-map-dot" aria-hidden="true"></span>
-                </div>
-                <div class="ios-alert-actions">
-                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('once')">Allow Once</button>
-                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('while')">Allow While Using the App</button>
-                  <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('deny')">Don&rsquo;t Allow</button>
+                  <div class="ios-alert-actions">
+                    <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('deny', event)">Don&rsquo;t Allow</button>
+                    <button type="button" class="ios-alert-btn" onclick="App.precheckLocationAllow('once', event)">Allow Once</button>
+                    <button type="button" class="ios-alert-btn ios-alert-btn--primary" onclick="App.precheckLocationAllow('while', event)">Allow While Using the App</button>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- Step 2: Bluetooth -->
-            <div class="precheck-step" id="precheck-step-bluetooth">
-              <div class="precheck-card">
-                <div class="precheck-icon-wrap bluetooth">
-                  <div class="precheck-icon-inner">
-                    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+          <!-- Steps 2–6: full-page white screens -->
+          <div class="precheck-page" id="precheck-step-bluetooth">
+            <div class="precheck-page-inner">
+              <div class="precheck-bt-visual" aria-hidden="true">
+                <span class="precheck-bt-ring precheck-bt-ring--2"></span>
+                <span class="precheck-bt-ring precheck-bt-ring--1"></span>
+                <span class="precheck-bt-core">
+                  <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+                    <path d="M8 7l8 5-8 5V7zm0 10v3l8-5.5-8-5.5v3z" fill="currentColor"/>
+                  </svg>
+                </span>
+              </div>
+              <h3 class="precheck-page-title">Bluetooth Connection</h3>
+              <p class="precheck-page-body">
+                Due to system restrictions, the device connection requires enabling bluetooth permission.
+              </p>
+            </div>
+          </div>
+
+          <div class="precheck-page" id="precheck-step-connecting">
+            <div class="precheck-page-inner">
+              <div class="precheck-bt-visual is-connecting" aria-hidden="true">
+                <span class="precheck-bt-ring precheck-bt-ring--2"></span>
+                <span class="precheck-bt-ring precheck-bt-ring--1"></span>
+                <svg class="precheck-connect-arc" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="#1a66ff" stroke-width="5" stroke-linecap="round" stroke-dasharray="82 245"/>
+                </svg>
+                <span class="precheck-bt-core">
+                  <svg viewBox="0 0 24 24" width="30" height="30">
+                    <path d="M8 7l8 5-8 5V7zm0 10v3l8-5.5-8-5.5v3z" fill="currentColor"/>
+                  </svg>
+                </span>
+              </div>
+              <h3 class="precheck-page-title">Connect To The Gopro...</h3>
+              <p class="precheck-page-body">Connecting GoPro.<br />Please wait patiently.</p>
+            </div>
+          </div>
+
+          <div class="precheck-page precheck-page--list" id="precheck-step-device">
+            <div class="precheck-page-inner precheck-page-inner--top">
+              <div class="device-setup-card">
+                <div class="device-setup-hero">
+                  <div class="device-setup-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M4 10v4M8 8v8M12 6v12M16 8v8M20 10v4" stroke-linecap="round"/>
+                      <path d="M2 14h20" stroke-linecap="round"/>
+                      <circle cx="12" cy="5" r="2"/>
+                    </svg>
+                  </div>
+                  <h3 class="device-setup-title">Device Connection</h3>
+                </div>
+                <div class="device-setup-toggle-row">
+                  <span>Device Connection</span>
+                  <label class="toggle device-connection-toggle">
+                    <input type="checkbox" id="precheck-device-toggle" checked onchange="App.precheckDeviceToggle(this.checked)" />
+                    <span></span>
+                  </label>
+                </div>
+              </div>
+              <div class="device-list-heading-row">
+                <h4 class="device-list-heading">Available Devices</h4>
+                <span class="device-list-hint">Select up to 2</span>
+              </div>
+              <div class="device-list-card" id="gopro-list">
+                <label class="device-list-item selected" id="device-pick-gopro-1">
+                  <input type="checkbox" name="gopro" value="GoPro-1" checked onchange="App.precheckToggleGopro('GoPro-1', this.checked)" />
+                  <span class="gopro-check" aria-hidden="true">✓</span>
+                  <span class="device-list-name">GoPro-1</span>
+                  <span class="device-list-status">Ready</span>
+                </label>
+                <div class="device-list-divider"></div>
+                <label class="device-list-item" id="device-pick-gopro-2">
+                  <input type="checkbox" name="gopro" value="GoPro-2" onchange="App.precheckToggleGopro('GoPro-2', this.checked)" />
+                  <span class="gopro-check" aria-hidden="true"></span>
+                  <span class="device-list-name">GoPro-2</span>
+                  <span class="device-list-status">Ready</span>
+                </label>
+                <div class="device-list-divider"></div>
+                <label class="device-list-item" id="device-pick-gopro-3">
+                  <input type="checkbox" name="gopro" value="GoPro-3" onchange="App.precheckToggleGopro('GoPro-3', this.checked)" />
+                  <span class="gopro-check" aria-hidden="true"></span>
+                  <span class="device-list-name">GoPro-3</span>
+                  <span class="device-list-status">Ready</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="precheck-page" id="precheck-step-sweeping">
+            <div class="precheck-page-inner">
+              <div class="sweeping-visual" aria-hidden="true">
+                <div class="sweeping-scene">
+                  <div class="sweeping-city">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <div class="sweeping-pin">
+                    <span class="sweeping-pin-head"></span>
+                    <span class="sweeping-pin-stem"></span>
+                    <span class="sweeping-pin-shadow"></span>
+                  </div>
+                </div>
+              </div>
+              <h3 class="precheck-page-title">Automatic Street Sweeping</h3>
+              <p class="precheck-page-body">
+                After enabling automatic street sweep, tasks will begin automatically on accept.
+              </p>
+            </div>
+          </div>
+
+          <div class="precheck-page" id="precheck-step-failed">
+            <div class="precheck-page-inner">
+              <div class="precheck-fail-visual" aria-hidden="true">
+                <div class="precheck-fail-halo">
+                  <div class="precheck-fail-icon">
+                    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
                       <path d="M8 7l8 5-8 5V7zm0 10v3l8-5.5-8-5.5v3z" fill="currentColor"/>
                     </svg>
+                    <span class="precheck-fail-x">×</span>
                   </div>
                 </div>
-                <h3 class="precheck-card-title">Bluetooth Connection</h3>
-                <p class="precheck-card-body">
-                  Due to system restrictions, the device connection requires enabling Bluetooth permission.
-                </p>
-                <div class="precheck-card-actions">
-                  <button type="button" class="btn btn-secondary precheck-btn" onclick="App.precheckBluetoothSkip()">Skip</button>
-                  <button type="button" class="btn btn-primary precheck-btn" onclick="App.precheckBluetoothNext()">Next</button>
-                </div>
               </div>
-            </div>
-
-            <!-- Step 3: Connecting -->
-            <div class="precheck-step" id="precheck-step-connecting">
-              <div class="precheck-card">
-                <div class="gopro-connect-visual">
-                  <svg class="gopro-device" viewBox="0 0 32 48" aria-hidden="true">
-                    <rect x="6" y="2" width="20" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <circle cx="16" cy="38" r="2" fill="currentColor"/>
-                  </svg>
-                  <svg class="gopro-pulse" viewBox="0 0 120 32" aria-hidden="true">
-                    <path d="M2 16 H28 L34 8 L40 24 L46 16 H118" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg class="gopro-camera" viewBox="0 0 48 36" aria-hidden="true">
-                    <rect x="2" y="8" width="44" height="24" rx="6" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <circle cx="24" cy="20" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <rect x="34" y="4" width="8" height="6" rx="2" fill="currentColor"/>
-                  </svg>
-                </div>
-                <h3 class="precheck-card-title">Connect To The Gopro...</h3>
-                <p class="precheck-card-body">Connecting GoPro. Please wait patiently.</p>
-              </div>
-            </div>
-
-            <!-- Step 4: GoPro selection -->
-            <div class="precheck-step" id="precheck-step-select">
-              <div class="precheck-card gopro-select-card">
-                <h3 class="gopro-select-title">GoPro</h3>
-                <div class="gopro-list" id="gopro-list">
-                  <label class="gopro-option selected">
-                    <input type="radio" name="gopro" value="GoPro_1" checked onchange="App.precheckSelectGopro(this.value)" />
-                    <span class="gopro-radio" aria-hidden="true"></span>
-                    <span>GoPro_1</span>
-                  </label>
-                  <label class="gopro-option">
-                    <input type="radio" name="gopro" value="GoPro_2" onchange="App.precheckSelectGopro(this.value)" />
-                    <span class="gopro-radio" aria-hidden="true"></span>
-                    <span>GoPro_2</span>
-                  </label>
-                  <label class="gopro-option">
-                    <input type="radio" name="gopro" value="GoPro_3" onchange="App.precheckSelectGopro(this.value)" />
-                    <span class="gopro-radio" aria-hidden="true"></span>
-                    <span>GoPro_3</span>
-                  </label>
-                </div>
-                <div class="precheck-card-actions">
-                  <button type="button" class="btn btn-secondary precheck-btn" onclick="App.precheckGoproClose()">Close</button>
-                  <button type="button" class="btn btn-primary precheck-btn" onclick="App.precheckGoproOk()">OK</button>
-                </div>
-              </div>
+              <h3 class="precheck-page-title">Connection To Gopro Failed</h3>
+              <p class="precheck-page-body precheck-page-body--rich">
+                Connection failed. The collection task cannot be started. You can
+                <strong>retry</strong> the connection or reconnect later on the <strong>settings</strong> page.
+              </p>
             </div>
           </div>
+        </div>
+
+        <div class="precheck-footer hidden" id="precheck-footer">
+          <button type="button" class="precheck-footer-btn precheck-footer-skip" id="precheck-skip-btn" onclick="App.precheckFooterSkip()">Skip</button>
+          <button type="button" class="precheck-footer-btn precheck-footer-primary" id="precheck-primary-btn" onclick="App.precheckFooterPrimary()">Next</button>
         </div>
       </div>
 
       <!-- MAP -->
       <div class="screen" id="screen-map">
         <div class="map-wrap">
+          <div class="bg-recording-bar hidden" id="bg-recording-bar-map" aria-live="polite">
+            <span class="bg-recording-dot" aria-hidden="true"></span>
+            <span class="bg-recording-label">Background street scanning</span>
+            <span class="bg-recording-time" data-bg-rec-time>0:00</span>
+            <button type="button" class="bg-recording-stop" onclick="App.openTerminateRecordingModal()" aria-label="Stop background recording">Stop</button>
+          </div>
           <div class="map-top-chrome" id="map-top-chrome">
             <div class="map-top-left">
               <div class="device-status-bar" id="device-status-bar">
@@ -271,9 +355,15 @@
             <div class="nav-turn">↱</div>
             <div class="nav-dist">2.5 km</div>
           </div>
-          <div class="speed-pill hidden" id="speed-pill">
-            <span class="speed-limit">25</span>
-            <span class="speed-dist">1.8 km</span>
+          <div class="map-stats-widget" data-map-screen="map" aria-label="Task duration and total distance">
+            <div class="map-hud-time">
+              <span class="map-hud-time-value" data-stat="duration">0:00</span>
+              <span class="map-hud-time-label">Task Duration</span>
+            </div>
+            <div class="map-hud-distance">
+              <span class="map-hud-distance-value" data-stat="distance">0 km</span>
+              <span class="map-hud-distance-label">Total Distance</span>
+            </div>
           </div>
           <div class="map-alert hidden" id="map-alert">
             <span class="map-alert-text">Run Out Of Memory</span>
@@ -288,13 +378,6 @@
             <button class="rail-btn" onclick="App.openFilterSheet()" aria-label="Filter">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
-              </svg>
-            </button>
-            <button class="rail-btn" onclick="App.go('tasks')" aria-label="History">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
-                <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M12 7v5l3 2" stroke-linecap="round" />
               </svg>
             </button>
             <div class="rail-zoom">
@@ -346,6 +429,16 @@
         </div>
       </div>
 
+      <!-- DAILY SUMMARY -->
+      <div class="screen" id="screen-daily-summary">
+        <div class="daily-page-header">
+          <span class="daily-page-header-spacer" aria-hidden="true"></span>
+          <h2>Daily Summary</h2>
+          <button type="button" class="icon-btn" onclick="App.renderDailySummary()" aria-label="Refresh">↻</button>
+        </div>
+        <div class="scroll daily-scroll" id="daily-summary-body"></div>
+      </div>
+
       <!-- TASK DETAIL -->
       <div class="screen" id="screen-task-detail">
         <div class="tasks-header">
@@ -363,7 +456,23 @@
           <h2>Settlement Map</h2>
         </div>
         <div class="map-wrap" style="flex: 1.2">
+          <div class="bg-recording-bar hidden" id="bg-recording-bar-progress" aria-live="polite">
+            <span class="bg-recording-dot" aria-hidden="true"></span>
+            <span class="bg-recording-label">Background street scanning</span>
+            <span class="bg-recording-time" data-bg-rec-time>0:00</span>
+            <button type="button" class="bg-recording-stop" onclick="App.openTerminateRecordingModal()" aria-label="Stop background recording">Stop</button>
+          </div>
           <div id="progress-map"></div>
+          <div class="map-stats-widget" data-map-screen="progress-map" aria-label="Task duration and total distance">
+            <div class="map-hud-time">
+              <span class="map-hud-time-value" data-stat="duration">0:00</span>
+              <span class="map-hud-time-label">Task Duration</span>
+            </div>
+            <div class="map-hud-distance">
+              <span class="map-hud-distance-value" data-stat="distance">0 km</span>
+              <span class="map-hud-distance-label">Total Distance</span>
+            </div>
+          </div>
           <button class="layer-fab" onclick="App.toggleProgressLayers()" title="Progress layers">
             <span class="layers-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -531,6 +640,53 @@
           </div>
         </div>
       </div>
+
+      <!-- Bottom tab bar (main app screens) -->
+      <nav class="bottom-nav hidden" id="bottom-nav" aria-label="Main navigation">
+        <button
+          type="button"
+          class="bottom-nav-item"
+          data-tab="tasks"
+          onclick="App.tabNav('tasks')"
+          aria-label="History"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
+            <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M12 7v5l3 2" stroke-linecap="round" />
+          </svg>
+          <span>History</span>
+        </button>
+        <div class="bottom-nav-center">
+          <button
+            type="button"
+            class="bottom-nav-map-btn"
+            data-tab="map"
+            onclick="App.tabNav('map')"
+            aria-label="Map tasks"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 21s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11z" stroke-linejoin="round" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
+            <span>Map</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="bottom-nav-item"
+          data-tab="daily-summary"
+          onclick="App.tabNav('daily-summary')"
+          aria-label="Calendar"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="4" y="5" width="16" height="16" rx="2" />
+            <path d="M8 3v4M16 3v4M4 11h16" stroke-linecap="round" />
+            <path d="M8 15h2M12 15h2M16 15h2M8 19h2" stroke-linecap="round" />
+          </svg>
+          <span>Calendar</span>
+        </button>
+      </nav>
     </div>
 
     <!-- Bottom sheets & modals -->
@@ -707,6 +863,17 @@
       </div>
     </div>
 
+    <div class="overlay" id="modal-terminate-recording">
+      <div class="modal modal-confirm">
+        <h3>Terminate background recording?</h3>
+        <p>Are you sure you want to terminate background street scanning recording? Ongoing capture will stop.</p>
+        <div class="modal-confirm-actions">
+          <button type="button" class="btn btn-ghost" onclick="App.closeModal('modal-terminate-recording')">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="App.confirmTerminateBackgroundRecording()">Terminate</button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay overlay-sheet" id="modal-task-status">
       <div class="bottom-sheet task-status-sheet">
         <div class="sheet-handle"></div>
@@ -756,5 +923,28 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260610e"></script>  </body>
+    <script src="app.js?v=20260625u"></script>
+    <script>
+      (function () {
+        var FALLBACK_MS = 2500;
+        setTimeout(function () {
+          var splash = document.getElementById('screen-splash');
+          var login = document.getElementById('screen-login');
+          if (!splash || !login || !splash.classList.contains('active')) return;
+          splash.classList.remove('active');
+          splash.classList.add('is-dismissed');
+          splash.setAttribute('aria-hidden', 'true');
+          document.querySelectorAll('.screen').forEach(function (el) {
+            el.classList.remove('active');
+          });
+          login.classList.add('active');
+          if (window.App && App.initLoginForm) {
+            try {
+              App.initLoginForm();
+            } catch (e) {}
+          }
+        }, FALLBACK_MS);
+      })();
+    </script>
+  </body>
 </html>

@@ -47,19 +47,20 @@ const PROGRESS_LAYERS = [
 
 const SETTLEMENT_BOTTOM = ['reviewing', 'approved', 'rejected'];
 
+const BOTTOM_NAV_SCREENS = ['map', 'tasks', 'settings', 'daily-summary'];
+const BOTTOM_NAV_TAB_FOR_SCREEN = {
+  map: 'map',
+  tasks: 'tasks',
+  'daily-summary': 'daily-summary',
+};
+
 /** Demo credentials — region + user ID + password must all match */
 const LOGIN_REGIONS = ['US', 'UK', 'SG'];
+const REGION_FLAGS = { US: '🇺🇸', UK: '🇬🇧', SG: '🇸🇬' };
 const DEMO_ACCOUNTS = [
   { region: 'US', userId: 'US-156', password: 'demo123', displayName: 'User Wang' },
   { region: 'UK', userId: 'UK-088', password: 'demo123', displayName: 'User Smith' },
   { region: 'SG', userId: 'SG-042', password: 'demo123', displayName: 'User Tan' },
-];
-
-const DEVICE_CHECKS = [
-  { id: 'gps', icon: '📍', title: 'GPS Positioning', modal: 'modal-location' },
-  { id: 'bluetooth', icon: '📶', title: 'Bluetooth', modal: 'modal-bluetooth' },
-  { id: 'network', icon: '📡', title: 'Network', modal: 'modal-network' },
-  { id: 'storage', icon: '💾', title: 'Storage Space', modal: 'modal-storage' },
 ];
 
 const PRECONDITION_ROWS = [
@@ -92,6 +93,34 @@ const PRECONDITION_ROWS = [
     err: 'Insufficient storage space',
   },
 ];
+
+const DEVICE_CHECKS = [
+  { id: 'gps', icon: '📍', title: 'GPS Positioning', modal: 'modal-location' },
+  { id: 'bluetooth', icon: '📶', title: 'Bluetooth', modal: 'modal-bluetooth' },
+  { id: 'network', icon: '📡', title: 'Network', modal: 'modal-network' },
+  { id: 'storage', icon: '💾', title: 'Storage Space', modal: 'modal-storage' },
+];
+
+const GOPRO_DEVICES = ['GoPro-1', 'GoPro-2', 'GoPro-3'];
+const GOPRO_MAX_SELECTION = 2;
+const PRECHECK_STEPS = ['location', 'bluetooth', 'connecting', 'device', 'sweeping'];
+const PRECHECK_FOOTER = {
+  location: { show: false },
+  bluetooth: { show: true, primary: 'Next', action: 'bluetoothNext' },
+  connecting: { show: true, skipOnly: true, action: 'connectingSkip' },
+  device: { show: true, primary: 'Next', action: 'deviceNext' },
+  sweeping: { show: true, primary: 'Next', action: 'finishSetup' },
+  failed: { show: true, primary: 'Try Again', action: 'retryConnect' },
+};
+
+function getPrecheckProgress(step) {
+  const flowSteps = ['bluetooth', 'connecting', 'device', 'sweeping'];
+  if (step === 'location') return 0;
+  if (step === 'failed') return 0.5;
+  const idx = flowSteps.indexOf(step);
+  if (idx < 0) return 0;
+  return (idx + 1) / flowSteps.length;
+}
 
 const TASK_DISTANCE_MAX_KM = 1.0;
 
@@ -180,6 +209,9 @@ const state = {
   mapMode: 'idle', // idle | navigating | recording | completing | review
   recSeconds: 0,
   recInterval: null,
+  backgroundRecording: false,
+  backgroundRecSeconds: 0,
+  backgroundRecInterval: null,
   activeRouteLayer: null,
   mapAlertDismissed: false,
   captureRestMode: false,
@@ -193,9 +225,17 @@ const state = {
   routePending: new Set(),
   precheckMap: null,
   precheckStep: 'location',
-  selectedGopro: 'GoPro_1',
+  precheckLocationReady: false,
+  precheckLocationResolved: false,
+  precheckLocationTimer: null,
+  selectedGopros: ['GoPro-1'],
   precheckTimer: null,
+  precheckConnectFail: false,
+  precheckFooterAction: 'skipToMap',
+  precheckBootTimer: null,
+  onboardingComplete: false,
   statusBarCollapsed: false,
+  splashTimer: null,
   auth: null,
   mapTasks: [
     seg('task_vermont_001', 'S Vermont Ave', '1200 S Vermont Ave, Los Angeles, CA', { lat: 34.0522, lng: -118.2915 }, { lat: 34.0535, lng: -118.289 }),
@@ -219,8 +259,9 @@ const state = {
   ],
   records: [
     {
-      task_id: 'task_vermont_today',
-      mapping_title: 'S Vermont Ave Mapping',
+      task_id: 'street_1928374858',
+      title: 'Street 1928374858',
+      mapping_title: 'Street 1928374858',
       ticket_id: '490539356-479',
       address: '1200 S Vermont Ave, Los Angeles, CA 90006, United States',
       shot_at: (() => {
@@ -228,15 +269,17 @@ const state = {
         d.setHours(10, 0, 0, 0);
         return d.toISOString();
       })(),
-      duration: '10m3s',
-      size: '50.2M',
+      duration: '13m10s',
+      size: '20.1M',
+      distance_km: 6.2,
       status: 'approved',
       audit_stage: 'completed',
       thumb: 'pool',
     },
     {
-      task_id: 'task_olympic_today',
-      mapping_title: 'Olympic Blvd Corridor',
+      task_id: 'street_3827948374',
+      title: 'Street 3827948374',
+      mapping_title: 'Street 3827948374',
       ticket_id: '490528901-468',
       address: '1800 W Olympic Blvd, Los Angeles, CA 90006, United States',
       shot_at: (() => {
@@ -244,15 +287,17 @@ const state = {
         d.setHours(11, 30, 0, 0);
         return d.toISOString();
       })(),
-      duration: '8m20s',
-      size: '45.8M',
+      duration: '18m46s',
+      size: '30.5M',
+      distance_km: 7.6,
       status: 'pending',
       audit_stage: 'reviewing',
-      thumb: 'urban',
+      thumb: 'palm',
     },
     {
-      task_id: 'task_wilshire_today',
-      mapping_title: 'Wilshire Transit Node',
+      task_id: 'street_2894785643',
+      title: 'Street 2894785643',
+      mapping_title: 'Street 2894785643',
       ticket_id: '490520056-470',
       address: '3400 Wilshire Blvd, Los Angeles, CA 90010, United States',
       shot_at: (() => {
@@ -260,8 +305,9 @@ const state = {
         d.setHours(14, 15, 0, 0);
         return d.toISOString();
       })(),
-      duration: '7m20s',
-      size: '38.5M',
+      duration: '11m10s',
+      size: '17.0M',
+      distance_km: 4.6,
       status: 'rejected',
       audit_stage: 'completed',
       thumb: 'street',
@@ -279,6 +325,7 @@ const state = {
       })(),
       duration: '10m3s',
       size: '50.2M',
+      distance_km: 5.1,
       status: 'pending',
       audit_stage: 'reviewing',
       thumb: 'pool',
@@ -300,6 +347,10 @@ const state = {
     autoUpdates: true,
     simulateFailedChecks: false,
   },
+  todayLoggedHours: 3.2,
+  dailySummaryMonth: new Date(2025, 5, 1),
+  dailySummarySelectedDay: 20,
+  dailySummaryTargets: { km: 20, hours: 4 },
 };
 
 function getTaskLifecycle(t) {
@@ -585,6 +636,82 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
+function formatDistanceKm(km) {
+  if (!km) return '0 km';
+  if (km >= 100) return `${Math.round(km)} km`;
+  if (km >= 10) return `${(Math.round(km * 10) / 10).toFixed(1)} km`;
+  return `${km.toFixed(1)} km`;
+}
+
+function getMapTaskDistanceByPoi(poiName) {
+  const t = state.mapTasks.find((x) => x.poi_name === poiName);
+  return t?.distance_km ?? 0;
+}
+
+function getMapStatsContext(screen) {
+  if (screen === 'precheck') {
+    return { durationSec: 0, distanceKm: 0, compactTop: false };
+  }
+  if (screen === 'progress-map') {
+    const visible = state.progressTasks.filter((t) => state.progressLayers[t.progress_status]);
+    const distanceKm = visible.reduce((sum, pt) => sum + getMapTaskDistanceByPoi(pt.poi_name), 0);
+    return { durationSec: 0, distanceKm, compactTop: false };
+  }
+  const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+  let distanceKm = 0;
+  if (state.selectedTaskId) {
+    const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    distanceKm = t?.distance_km ?? 0;
+  }
+  return { durationSec: state.recSeconds || 0, distanceKm, compactTop: driving };
+}
+
+function updateMapStatsWidgets() {
+  document.querySelectorAll('.map-stats-widget').forEach((el) => {
+    const ctx = getMapStatsContext(el.dataset.mapScreen);
+    const durEl = el.querySelector('[data-stat="duration"]');
+    const distEl = el.querySelector('[data-stat="distance"]');
+    if (durEl) {
+      const text = formatTime(ctx.durationSec);
+      durEl.textContent = text;
+      durEl.classList.toggle('is-long', text.length > 5);
+    }
+    if (distEl) distEl.textContent = formatDistanceKm(ctx.distanceKm);
+    el.classList.toggle('is-compact-top', ctx.compactTop);
+  });
+}
+
+function updateBackgroundRecordingBar() {
+  const visible = state.backgroundRecording;
+  document.querySelectorAll('.bg-recording-bar').forEach((bar) => {
+    bar.classList.toggle('hidden', !visible);
+    const timeEl = bar.querySelector('[data-bg-rec-time]');
+    if (timeEl) timeEl.textContent = formatTime(state.backgroundRecSeconds);
+  });
+  document.querySelectorAll('.map-wrap').forEach((wrap) => {
+    wrap.classList.toggle('has-bg-recording', visible);
+  });
+}
+
+function startBackgroundRecording() {
+  if (state.backgroundRecording) return;
+  state.backgroundRecording = true;
+  state.backgroundRecSeconds = 0;
+  clearInterval(state.backgroundRecInterval);
+  state.backgroundRecInterval = setInterval(() => {
+    state.backgroundRecSeconds += 1;
+    updateBackgroundRecordingBar();
+  }, 1000);
+  updateBackgroundRecordingBar();
+}
+
+function stopBackgroundRecording() {
+  state.backgroundRecording = false;
+  clearInterval(state.backgroundRecInterval);
+  state.backgroundRecInterval = null;
+  updateBackgroundRecordingBar();
+}
+
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -604,6 +731,144 @@ function toastSuccess(msg) {
 
 function computeStats() {
   return { done: 12, todo: 150, passed: 10 };
+}
+
+function parseDurationText(text) {
+  if (!text) return 0;
+  let sec = 0;
+  const h = text.match(/(\d+)h/);
+  const m = text.match(/(\d+)m/);
+  const s = text.match(/(\d+)s/);
+  if (h) sec += parseInt(h[1], 10) * 3600;
+  if (m) sec += parseInt(m[1], 10) * 60;
+  if (s) sec += parseInt(s[1], 10);
+  return sec;
+}
+
+function computeTodayMetrics() {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const today = state.records.filter((r) => new Date(r.shot_at) >= startOfToday);
+  const kmSum = today.reduce((sum, r) => sum + (r.distance_km || 0), 0);
+  const targets = state.dailySummaryTargets;
+  const km = kmSum || 18.4;
+  const hours = state.todayLoggedHours ?? 3.2;
+  return {
+    km: km.toFixed(1),
+    hours: hours.toFixed(1),
+    kmPct: Math.min(100, Math.round((km / targets.km) * 100)),
+    hoursPct: Math.min(100, Math.round((hours / targets.hours) * 100)),
+    targets,
+  };
+}
+
+
+function getDailySummaryMonthData(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const data = {};
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const todayDay = isCurrentMonth ? today.getDate() : null;
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const isFuture = isCurrentMonth && todayDay !== null && day > todayDay;
+    if (isFuture) {
+      data[day] = { status: 'empty', km: 0, hours: 0 };
+      continue;
+    }
+
+    if (day === 20 && year === 2025 && month === 5) {
+      data[day] = { status: 'progress', km: 18.4, hours: 3.2 };
+    } else if (day % 9 === 0 || day === 13) {
+      data[day] = { status: 'fail', km: 11.6 + (day % 3), hours: 2.2 + (day % 4) * 0.2 };
+    } else if (day % 7 === 0) {
+      data[day] = { status: 'pending', km: 0, hours: 0 };
+    } else {
+      data[day] = {
+        status: 'pass',
+        km: 19.8 + (day % 5) * 0.3,
+        hours: 3.8 + (day % 3) * 0.2,
+      };
+    }
+  }
+  return data;
+}
+
+function computeDailySummaryMonthStats(year, month) {
+  const monthData = getDailySummaryMonthData(year, month);
+  let completed = 0;
+  let failed = 0;
+  let totalKm = 0;
+  let totalHours = 0;
+  Object.values(monthData).forEach((info) => {
+    if (info.status === 'pass') {
+      completed += 1;
+      totalKm += info.km || 0;
+      totalHours += info.hours || 0;
+    } else if (info.status === 'fail') {
+      failed += 1;
+    } else if (info.status === 'progress') {
+      totalKm += info.km || 0;
+      totalHours += info.hours || 0;
+    }
+  });
+  const tracked = completed + failed;
+  const passRate = tracked ? Math.round((completed / tracked) * 100) : 0;
+  return { completed, failed, totalKm, totalHours, passRate };
+}
+
+function formatDailySummaryDetailTitle(year, month, day) {
+  const d = new Date(year, month, day);
+  const today = new Date();
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate();
+  if (isToday) return "Today's Detail";
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric' }) + ' Detail';
+}
+
+function renderDailySummaryStatusIcon(status) {
+  if (status === 'pass') {
+    return `<span class="daily-cell-icon daily-cell-icon--pass" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>
+    </span>`;
+  }
+  if (status === 'fail') {
+    return `<span class="daily-cell-icon daily-cell-icon--fail" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>
+    </span>`;
+  }
+  if (status === 'progress') {
+    return `<span class="daily-cell-icon daily-cell-icon--progress" aria-hidden="true"><span class="daily-cell-progress-dot"></span></span>`;
+  }
+  return '<span class="daily-cell-icon daily-cell-icon--pending" aria-hidden="true"></span>';
+}
+
+function renderDailySummaryStatusBadge(status, label) {
+  if (status === 'progress') {
+    return `<span class="daily-status-pill daily-status-pill--progress">
+      <span class="daily-status-toggle" aria-hidden="true"><span class="daily-status-toggle-knob"></span></span>
+      ${label}
+    </span>`;
+  }
+  return `<span class="daily-status-pill daily-status-pill--${status}">
+    <i class="daily-status-dot daily-status-dot--${status}"></i>${label}
+  </span>`;
+}
+
+
+function getDailySummaryDayInfo(year, month, day) {
+  const monthData = getDailySummaryMonthData(year, month);
+  return monthData[day] || { status: 'empty', km: 0, hours: 0 };
+}
+
+function formatDailySummaryStatus(status) {
+  if (status === 'pass') return 'Completed';
+  if (status === 'fail') return 'Failed';
+  if (status === 'progress') return 'In Progress';
+  if (status === 'pending') return 'Pending';
+  return 'No Data';
 }
 
 function canUndoRecord(r) {
@@ -763,7 +1028,32 @@ function settlementSummary() {
   return { ...c, passRate: audit ? Math.round((c.approved / audit) * 100) : 0 };
 }
 
+function updateBottomNav() {
+  const nav = document.getElementById('bottom-nav');
+  const phone = document.getElementById('app');
+  if (!nav) return;
+
+  const driving =
+    state.screen === 'map' && ['navigating', 'recording', 'completing'].includes(state.mapMode);
+  const show = BOTTOM_NAV_SCREENS.includes(state.screen) && !driving;
+
+  nav.classList.toggle('hidden', !show);
+  phone?.classList.toggle('has-bottom-nav', show);
+
+  nav.querySelectorAll('[data-tab]').forEach((btn) => {
+    const tab = btn.dataset.tab;
+    const active = tab === BOTTOM_NAV_TAB_FOR_SCREEN[state.screen];
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-current', active ? 'page' : 'false');
+  });
+}
+
 const App = {
+  tabNav(screen) {
+    if (state.screen === screen) return;
+    App.go(screen);
+  },
+
   go(screen) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
     const map = {
@@ -771,6 +1061,7 @@ const App = {
       precheck: 'screen-precheck',
       map: 'screen-map',
       tasks: 'screen-tasks',
+      'daily-summary': 'screen-daily-summary',
       'task-detail': 'screen-task-detail',
       'progress-map': 'screen-progress-map',
       settings: 'screen-settings',
@@ -781,7 +1072,9 @@ const App = {
     document.getElementById('filter-sheet').classList.remove('show');
     document.getElementById('progress-layer-panel').classList.remove('show');
 
-    if (screen === 'precheck') App.startPrecheckFlow();
+    if (screen === 'precheck') {
+      App.startPrecheckFlow();
+    }
     if (screen === 'map') {
       setTimeout(() => {
         if (!state.map) App.initMap();
@@ -789,9 +1082,10 @@ const App = {
         App.renderMapTasks();
         App.renderTaskSheet();
         App.updateMapChrome();
+        updateBackgroundRecordingBar();
+        updateMapStatsWidgets();
       }, 100);
     }
-    if (screen === 'tasks') App.renderTaskList();
     if (screen === 'task-detail') App.renderTaskDetail();
     if (screen === 'settings') App.updateSettingsProfile();
     if (screen === 'version') App.syncSettingsToggles();
@@ -801,8 +1095,13 @@ const App = {
         else state.progressMap.invalidateSize();
         App.renderProgressMap();
         App.renderSettlementPanel();
+        updateBackgroundRecordingBar();
+        updateMapStatsWidgets();
       }, 100);
     }
+    if (screen === 'tasks') App.renderTaskList();
+    if (screen === 'daily-summary') App.renderDailySummary();
+    updateBottomNav();
   },
 
   login() {
@@ -811,8 +1110,8 @@ const App = {
     const password = document.getElementById('login-pass').value;
 
     if (!region) {
-      App.showLoginError('Please select a region.');
       document.getElementById('login-region-wrap').classList.add('is-error');
+      App.showLoginError('Please select a region.');
       return;
     }
     if (!userId || !password) {
@@ -828,9 +1127,10 @@ const App = {
     );
 
     if (!account) {
-      App.showLoginError('Invalid region, user ID, or password.');
+      document.getElementById('login-region-wrap').classList.add('is-error');
       document.getElementById('login-user-wrap').classList.add('is-error');
       document.getElementById('login-pass-wrap').classList.add('is-error');
+      App.showLoginError('Invalid region, user ID, or password.');
       return;
     }
 
@@ -840,19 +1140,115 @@ const App = {
       displayName: account.displayName,
     };
     App.clearLoginError();
-    App.go('precheck');
+    setTimeout(() => App.go('precheck'), 280);
+  },
+
+  unlockPrecheckLocationAlert(delay = 650) {
+    state.precheckLocationReady = false;
+    state.precheckLocationResolved = false;
+    const alertEl = document.getElementById('precheck-location-alert');
+    if (alertEl) {
+      alertEl.classList.add('is-locked');
+      alertEl.classList.remove('is-hidden');
+    }
+    if (state.precheckLocationTimer) clearTimeout(state.precheckLocationTimer);
+    state.precheckLocationTimer = setTimeout(() => {
+      state.precheckLocationReady = true;
+      state.precheckLocationTimer = null;
+      alertEl?.classList.remove('is-locked');
+    }, delay);
+  },
+
+  initPrecheckMap() {
+    const mapEl = document.getElementById('precheck-map');
+    if (!mapEl) return;
+    if (state.precheckMap) {
+      state.precheckMap.invalidateSize();
+      return;
+    }
+    state.precheckMap = L.map('precheck-map', {
+      zoomControl: false,
+      attributionControl: false,
+    }).setView([34.06, -118.32], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+    }).addTo(state.precheckMap);
   },
 
   initLoginForm() {
     const select = document.getElementById('login-region');
-    LOGIN_REGIONS.forEach((code) => {
-      const opt = document.createElement('option');
-      opt.value = code;
-      opt.textContent = code;
-      select.appendChild(opt);
-    });
-    select.value = 'US';
+    if (!select) return;
+    if (!select.dataset.initialized) {
+      LOGIN_REGIONS.forEach((code) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = code;
+        select.appendChild(opt);
+      });
+      select.dataset.initialized = '1';
+    }
+    select.value = '';
     App.onRegionChange();
+  },
+
+  finishSplash() {
+    if (state.splashTimer) {
+      clearTimeout(state.splashTimer);
+      state.splashTimer = null;
+    }
+    const splash = document.getElementById('screen-splash');
+    if (splash) {
+      splash.classList.remove('active');
+      splash.classList.add('is-dismissed');
+      splash.setAttribute('aria-hidden', 'true');
+    }
+    App.showLoginScreen();
+    try {
+      App.initLoginForm();
+    } catch (err) {
+      console.error('initLoginForm failed after splash', err);
+    }
+  },
+
+  startSplash() {
+    const SPLASH_DURATION_MS = 2000;
+    const bar = document.getElementById('splash-progress-bar');
+    const splash = document.getElementById('screen-splash');
+    const login = document.getElementById('screen-login');
+    if (!splash || !login) {
+      App.showLoginScreen();
+      App.initLoginForm();
+      return;
+    }
+    splash.classList.add('active');
+    login.classList.remove('active');
+    state.screen = 'splash';
+    if (state.splashTimer) clearTimeout(state.splashTimer);
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        bar.style.transition = `width ${SPLASH_DURATION_MS}ms linear`;
+        bar.style.width = '100%';
+      });
+    }
+    state.splashTimer = setTimeout(() => App.finishSplash(), SPLASH_DURATION_MS);
+  },
+
+  showLoginScreen() {
+    if (state.splashTimer) {
+      clearTimeout(state.splashTimer);
+      state.splashTimer = null;
+    }
+    const splash = document.getElementById('screen-splash');
+    if (splash) {
+      splash.classList.remove('active');
+      splash.classList.add('is-dismissed');
+      splash.setAttribute('aria-hidden', 'true');
+    }
+    document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+    document.getElementById('screen-login')?.classList.add('active');
+    state.screen = 'login';
   },
 
   updateSettingsProfile() {
@@ -905,19 +1301,45 @@ const App = {
   },
 
   onRegionChange() {
-    const region = document.getElementById('login-region').value;
+    const select = document.getElementById('login-region');
     const wrap = document.getElementById('login-region-wrap');
+    if (!select || !wrap) return;
+    const region = select.value;
     const check = document.getElementById('region-check');
+    const flag = document.getElementById('region-flag');
+    const clearBtn = document.getElementById('region-clear');
+    const help = document.getElementById('region-help');
     const valid = !!region;
     wrap.classList.toggle('is-empty', !region);
     wrap.classList.toggle('is-valid', valid);
-    check.classList.toggle('hidden', !valid);
+    wrap.classList.toggle('has-region', valid);
+    check?.classList.toggle('hidden', !valid || wrap.classList.contains('is-error'));
+    clearBtn?.classList.toggle('hidden', !valid);
+    help?.classList.toggle('hidden', !wrap.classList.contains('is-error'));
+    if (flag) {
+      flag.textContent = REGION_FLAGS[region] || '';
+      flag.classList.toggle('hidden', !valid);
+    }
     const account = DEMO_ACCOUNTS.find((a) => a.region === region);
     const userInput = document.getElementById('login-user');
     if (account && userInput && !userInput.dataset.edited) {
       userInput.value = account.displayName;
     }
-    App.clearLoginError();
+  },
+
+  onRegionFocus(focused) {
+    document.getElementById('login-region-wrap').classList.toggle('is-focused', focused);
+  },
+
+  onUserFocus(focused) {
+    document.getElementById('login-user-wrap').classList.toggle('is-focused', focused);
+  },
+
+  clearRegion() {
+    const select = document.getElementById('login-region');
+    select.value = '';
+    App.onRegionChange();
+    select.focus();
   },
 
   onPassInput() {
@@ -944,6 +1366,11 @@ const App = {
     el.textContent = msg;
     el.classList.remove('hidden');
     document.getElementById('login-form').classList.add('has-error');
+    const regionWrap = document.getElementById('login-region-wrap');
+    if (regionWrap.classList.contains('is-error')) {
+      document.getElementById('region-help').classList.remove('hidden');
+      document.getElementById('region-check').classList.add('hidden');
+    }
   },
 
   clearLoginError() {
@@ -952,6 +1379,8 @@ const App = {
     document.getElementById('login-region-wrap').classList.remove('is-error');
     document.getElementById('login-user-wrap').classList.remove('is-error');
     document.getElementById('login-pass-wrap').classList.remove('is-error');
+    document.getElementById('region-help').classList.add('hidden');
+    App.onRegionChange();
   },
 
   toggleLoginPass() {
@@ -964,48 +1393,101 @@ const App = {
       clearTimeout(state.precheckTimer);
       state.precheckTimer = null;
     }
+    if (state.precheckBootTimer) {
+      clearTimeout(state.precheckBootTimer);
+      state.precheckBootTimer = null;
+    }
     state.precheckStep = 'location';
-    state.selectedGopro = 'GoPro_1';
+    state.selectedGopros = ['GoPro-1'];
+    state.precheckConnectFail =
+      state.settings.simulateFailedChecks ||
+      new URLSearchParams(location.search).get('precheckFail') === '1';
     state.deviceChecks = { gps: false, bluetooth: false, network: true, storage: true };
     state.preconditions = { bluetooth: false, network: true, gps: false, storage: true };
     state.preconditionGps = { authorized: false, distanceOk: false };
-    document.querySelectorAll('#gopro-list .gopro-option').forEach((el, i) => {
-      el.classList.toggle('selected', i === 0);
-      const input = el.querySelector('input');
-      if (input) input.checked = i === 0;
-    });
-    setTimeout(() => {
-      App.initPrecheckMap();
-      App.showPrecheckStep('location');
-    }, 120);
+    const toggle = document.getElementById('precheck-device-toggle');
+    if (toggle) toggle.checked = true;
+    App.syncGoproSelectionUI();
+    App.showPrecheckStep('location');
   },
 
-  initPrecheckMap() {
-    if (state.precheckMap) {
-      state.precheckMap.invalidateSize();
-      return;
+  updatePrecheckChrome(step) {
+    const bar = document.getElementById('configure-progress-bar');
+    const footer = document.getElementById('precheck-footer');
+    const skipBtn = document.getElementById('precheck-skip-btn');
+    const primaryBtn = document.getElementById('precheck-primary-btn');
+
+    if (bar) bar.style.width = `${Math.round(getPrecheckProgress(step) * 100)}%`;
+
+    const footerCfg = PRECHECK_FOOTER[step] || PRECHECK_FOOTER.bluetooth;
+    if (footer) {
+      footer.classList.toggle('hidden', !footerCfg.show);
+      footer.classList.toggle('is-skip-only', !!footerCfg.skipOnly);
     }
-    state.precheckMap = L.map('precheck-map', {
-      zoomControl: false,
-      attributionControl: false,
-    }).setView([48.8566, 2.3522], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-    }).addTo(state.precheckMap);
+    if (primaryBtn) {
+      primaryBtn.textContent = footerCfg.primary || 'Next';
+      primaryBtn.style.display = footerCfg.skipOnly ? 'none' : '';
+    }
+    if (skipBtn) skipBtn.style.display = '';
+    state.precheckFooterAction = footerCfg.action || 'skipToMap';
   },
 
   showPrecheckStep(step) {
     state.precheckStep = step;
-    document.querySelectorAll('.precheck-step').forEach((el) => el.classList.remove('show'));
+    document.querySelectorAll('.precheck-page').forEach((el) => el.classList.remove('show'));
     const target = document.getElementById(`precheck-step-${step}`);
     if (target) target.classList.add('show');
-    if (state.precheckMap) setTimeout(() => state.precheckMap.invalidateSize(), 80);
+    App.updatePrecheckChrome(step);
+    if (step === 'location') {
+      App.unlockPrecheckLocationAlert();
+      requestAnimationFrame(() => {
+        App.initPrecheckMap();
+        setTimeout(() => state.precheckMap?.invalidateSize(), 120);
+      });
+    }
+    if (step === 'device') App.syncGoproSelectionUI();
   },
 
-  precheckLocationAllow() {
-    state.deviceChecks.gps = true;
-    state.preconditionGps = { authorized: true, distanceOk: true };
-    syncGpsPrecondition();
+  precheckFooterSkip() {
+    const cfg = PRECHECK_FOOTER[state.precheckStep];
+    if (cfg?.skipOnly && cfg.action === 'connectingSkip') App.precheckConnectingSkip();
+    else App.precheckSkipToMap();
+  },
+
+  precheckFooterPrimary() {
+    const action = state.precheckFooterAction;
+    if (action === 'bluetoothNext') App.precheckBluetoothNext();
+    else if (action === 'deviceNext') App.precheckDeviceNext();
+    else if (action === 'finishSetup') App.precheckFinishSetup();
+    else if (action === 'retryConnect') App.precheckRetryConnect();
+    else App.precheckSkipToMap();
+  },
+
+  precheckLocationAllow(mode, ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+    }
+    if (!state.precheckLocationReady) return;
+    if (state.precheckLocationResolved) return;
+    if (state.precheckStep !== 'location') return;
+    state.precheckLocationResolved = true;
+    if (state.precheckLocationTimer) {
+      clearTimeout(state.precheckLocationTimer);
+      state.precheckLocationTimer = null;
+    }
+    document.getElementById('precheck-location-alert')?.classList.remove('is-locked');
+    if (mode === 'deny') {
+      state.deviceChecks.gps = false;
+      state.preconditionGps = { authorized: false, distanceOk: false };
+      syncGpsPrecondition();
+      toast('Location access denied');
+    } else {
+      state.deviceChecks.gps = true;
+      state.preconditionGps = { authorized: true, distanceOk: true };
+      syncGpsPrecondition();
+    }
     App.showPrecheckStep('bluetooth');
   },
 
@@ -1015,40 +1497,127 @@ const App = {
     App.precheckStartConnecting();
   },
 
-  precheckBluetoothSkip() {
-    if (state.precheckTimer) {
-      clearTimeout(state.precheckTimer);
-      state.precheckTimer = null;
-    }
-    App.go('map');
-  },
-
   precheckStartConnecting() {
     App.showPrecheckStep('connecting');
     if (state.precheckTimer) clearTimeout(state.precheckTimer);
     state.precheckTimer = setTimeout(() => {
       state.precheckTimer = null;
-      App.showPrecheckStep('select');
+      if (state.precheckConnectFail) {
+        App.showPrecheckStep('failed');
+      } else {
+        App.showPrecheckStep('device');
+      }
     }, 2200);
   },
 
-  precheckSelectGopro(value) {
-    state.selectedGopro = value;
-    document.querySelectorAll('#gopro-list .gopro-option').forEach((el) => {
-      el.classList.toggle('selected', el.querySelector('input')?.value === value);
+  precheckConnectingSkip() {
+    if (state.precheckTimer) {
+      clearTimeout(state.precheckTimer);
+      state.precheckTimer = null;
+    }
+    App.showPrecheckStep('device');
+  },
+
+  syncGoproSelectionUI() {
+    GOPRO_DEVICES.forEach((name) => {
+      const el = document.getElementById(`device-pick-${name.toLowerCase()}`);
+      const input = el?.querySelector('input[name="gopro"]');
+      const selected = state.selectedGopros.includes(name);
+      if (input) input.checked = selected;
+      el?.classList.toggle('selected', selected);
+      const check = el?.querySelector('.gopro-check');
+      if (check) check.textContent = selected ? '✓' : '';
+    });
+
+    const atMax = state.selectedGopros.length >= GOPRO_MAX_SELECTION;
+    GOPRO_DEVICES.forEach((name) => {
+      const el = document.getElementById(`device-pick-${name.toLowerCase()}`);
+      if (!el) return;
+      const selected = state.selectedGopros.includes(name);
+      el.classList.toggle('is-disabled', atMax && !selected);
     });
   },
 
-  precheckGoproOk() {
+  precheckToggleGopro(value, checked) {
+    let selected = [...state.selectedGopros];
+    if (checked) {
+      if (selected.includes(value)) return;
+      if (selected.length >= GOPRO_MAX_SELECTION) {
+        const input = document.querySelector(`input[name="gopro"][value="${value}"]`);
+        if (input) input.checked = false;
+        toast(`You can connect up to ${GOPRO_MAX_SELECTION} devices`);
+        return;
+      }
+      selected.push(value);
+    } else {
+      selected = selected.filter((item) => item !== value);
+    }
+    state.selectedGopros = selected;
+    App.syncGoproSelectionUI();
+  },
+
+  precheckSelectGopro(value) {
+    App.precheckToggleGopro(value, !state.selectedGopros.includes(value));
+  },
+
+  precheckDeviceToggle(on) {
+    if (!on) toast('Device connection disabled');
+  },
+
+  precheckDeviceNext() {
+    const toggle = document.getElementById('precheck-device-toggle');
+    if (toggle && !toggle.checked) {
+      toast('Turn on Device Connection to continue');
+      return;
+    }
+    if (!state.selectedGopros.length) {
+      toast('Select at least one device');
+      return;
+    }
+    state.deviceChecks.bluetooth = true;
+    state.preconditions.bluetooth = true;
+    App.showPrecheckStep('sweeping');
+  },
+
+  precheckFinishSetup() {
     state.deviceChecks = { gps: true, bluetooth: true, network: true, storage: true };
     state.preconditionGps = { authorized: true, distanceOk: true };
     state.preconditions = { bluetooth: true, network: true, gps: true, storage: true };
-    toast(`Connected to ${state.selectedGopro}`);
+    state.onboardingComplete = true;
+    toastSuccess(`Connected to ${state.selectedGopros.join(' & ')}`);
     App.go('map');
   },
 
-  precheckGoproClose() {
-    App.go('login');
+  precheckSkipToMap() {
+    if (state.precheckTimer) {
+      clearTimeout(state.precheckTimer);
+      state.precheckTimer = null;
+    }
+    state.onboardingComplete = false;
+    App.go('map');
+  },
+
+  precheckRetryConnect() {
+    state.precheckConnectFail = false;
+    App.precheckStartConnecting();
+  },
+
+  precheckBack() {
+    const order = PRECHECK_STEPS;
+    const idx = order.indexOf(state.precheckStep);
+    if (state.precheckStep === 'failed') {
+      App.showPrecheckStep('bluetooth');
+      return;
+    }
+    if (idx <= 0) {
+      App.go('login');
+      return;
+    }
+    if (state.precheckStep === 'connecting' && state.precheckTimer) {
+      clearTimeout(state.precheckTimer);
+      state.precheckTimer = null;
+    }
+    App.showPrecheckStep(order[idx - 1]);
   },
 
   renderPrecheck() {
@@ -1057,6 +1626,7 @@ const App = {
 
   refreshPrecheck() {
     App.startPrecheckFlow();
+    toast('Refreshed');
   },
 
   openCheckModal(id) {
@@ -1179,7 +1749,6 @@ const App = {
     const deviceBattWrap = document.getElementById('device-batt-wrap');
     const deviceSignal = document.getElementById('device-signal');
     const nav = document.getElementById('nav-banner');
-    const speed = document.getElementById('speed-pill');
     const captureSheet = document.getElementById('capture-sheet');
     const mapFloats = document.getElementById('map-float-actions');
     const mapAlert = document.getElementById('map-alert');
@@ -1190,7 +1759,6 @@ const App = {
 
     topChrome.classList.toggle('hidden', driving);
     nav.classList.toggle('hidden', !driving);
-    speed.classList.toggle('hidden', !driving);
     captureSheet.classList.toggle('hidden', !driving);
     mapFloats.classList.toggle('hidden', !driving);
 
@@ -1231,7 +1799,7 @@ const App = {
     } else if (allPreconditionsOk()) {
       deviceDot.className = 'device-dot';
       deviceConn.textContent = 'CONNECTED';
-      deviceBatt.textContent = '51';
+      deviceBatt.textContent = state.onboardingComplete ? '98' : '51';
       deviceBattWrap.className = 'device-batt-wrap connected has-bolt';
       statusBar.classList.add('is-online');
       deviceSignal.dataset.level = '5';
@@ -1251,6 +1819,9 @@ const App = {
     statusBar.classList.toggle('is-collapsed', state.statusBarCollapsed);
 
     if (driving) App.renderMapTasks({ skipFit: true });
+    updateMapStatsWidgets();
+    updateBackgroundRecordingBar();
+    updateBottomNav();
   },
 
   tickRec() {
@@ -1542,6 +2113,7 @@ const App = {
   },
 
   tapRecord() {
+    startBackgroundRecording();
     state.mapMode = 'recording';
     if (!state.recSeconds) state.recSeconds = 0;
     clearInterval(state.recInterval);
@@ -1567,6 +2139,7 @@ const App = {
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
+    updateBackgroundRecordingBar();
     toast('Task submitted for review');
   },
 
@@ -1592,6 +2165,26 @@ const App = {
     toast(state.captureRestMode ? 'Over — paused segment' : 'Over — resumed');
   },
 
+  openTerminateRecordingModal() {
+    document.getElementById('modal-terminate-recording').classList.add('show');
+  },
+
+  confirmTerminateBackgroundRecording() {
+    App.closeModal('modal-terminate-recording');
+    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
+      clearInterval(state.recInterval);
+      state.mapMode = 'idle';
+      state.recSeconds = 0;
+      state.mapAlertDismissed = false;
+      state.captureRestMode = false;
+      App.renderMapTasks();
+      App.renderTaskSheet();
+      App.updateMapChrome();
+    }
+    stopBackgroundRecording();
+    toast('Background recording stopped');
+  },
+
   openLogoutModal() {
     App.updateSettingsProfile();
     document.getElementById('modal-logout').classList.add('show');
@@ -1602,7 +2195,9 @@ const App = {
     state.selectedTaskId = null;
     state.mapMode = 'idle';
     state.auth = null;
+    state.onboardingComplete = false;
     clearInterval(state.recInterval);
+    stopBackgroundRecording();
     document.getElementById('login-user').value = '';
     document.getElementById('login-pass').value = '';
     document.getElementById('login-region').value = '';
@@ -1706,6 +2301,7 @@ const App = {
         state.progressLayers[l.id] = e.target.checked;
         App.renderProgressMap();
         App.renderSettlementPanel();
+        updateMapStatsWidgets();
       };
       panel.appendChild(row);
     });
@@ -1722,11 +2318,32 @@ const App = {
   },
 
   renderTaskList() {
-    const stats = computeStats();
+    const metrics = computeTodayMetrics();
     document.getElementById('tasks-summary').innerHTML = `
-      <div class="summary-item blue"><strong>${stats.done}</strong><span>DONE</span></div>
-      <div class="summary-item"><strong>${stats.todo}</strong><span>TO DO</span></div>
-      <div class="summary-item red"><strong>${stats.passed}</strong><span>PASSED</span></div>`;
+      <div class="tasks-metrics">
+        <article class="tasks-metric-card">
+          <span class="tasks-metric-badge">Today's KM</span>
+          <div class="tasks-metric-main">
+            <span class="tasks-metric-num">${metrics.km}</span>
+            <span class="tasks-metric-unit">km</span>
+          </div>
+          <p class="tasks-metric-goal">${metrics.km} / ${metrics.targets.km} km</p>
+          <div class="tasks-metric-progress" role="progressbar" aria-valuenow="${metrics.kmPct}" aria-valuemin="0" aria-valuemax="100">
+            <span class="tasks-metric-progress-fill" style="width:${metrics.kmPct}%"></span>
+          </div>
+        </article>
+        <article class="tasks-metric-card">
+          <span class="tasks-metric-badge">Today's Hours</span>
+          <div class="tasks-metric-main">
+            <span class="tasks-metric-num">${metrics.hours}</span>
+            <span class="tasks-metric-unit">h</span>
+          </div>
+          <p class="tasks-metric-goal">${metrics.hours} / ${metrics.targets.hours} h</p>
+          <div class="tasks-metric-progress" role="progressbar" aria-valuenow="${metrics.hoursPct}" aria-valuemin="0" aria-valuemax="100">
+            <span class="tasks-metric-progress-fill tasks-metric-progress-fill--hours" style="width:${metrics.hoursPct}%"></span>
+          </div>
+        </article>
+      </div>`;
 
     document.getElementById('task-date-filter-label').textContent = state.taskDateLabel;
     document.getElementById('task-status-filter-label').textContent =
@@ -1755,30 +2372,27 @@ const App = {
   },
 
   renderTaskCardHtml(r) {
-    const [bg, fg] = getRecordStatusTone(r.status);
+    const statusClass = getRecordStatusClass(r.status);
     const label = getRecordStatusLabel(r.status);
-    const title = r.mapping_title || `${r.title} Mapping`;
+    const title = r.title || r.mapping_title || r.task_id;
     const canUndo = canUndoRecord(r);
     const copyIcon =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
     const undoIcon =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 14 4 9l5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-7a4 4 0 00-4-4H4" stroke-linecap="round"/></svg>';
 
-    return `<article class="task-media-card" onclick="App.openTaskDetail('${r.task_id}')">
-      <div class="task-media-card-top">
-        <div class="task-media-thumb task-media-thumb--${r.thumb || 'street'}"></div>
-        <span class="task-media-meta-pill">${r.duration} | ${r.size}</span>
-        <div class="task-media-actions">
-          <button type="button" class="task-media-action" onclick="event.stopPropagation();App.copyTicketId('${r.ticket_id || r.task_id}')" aria-label="Copy">${copyIcon}</button>
-          ${canUndo ? `<button type="button" class="task-media-action" onclick="event.stopPropagation();App.promptUndo('${r.task_id}')" aria-label="Undo">${undoIcon}</button>` : ''}
-        </div>
+    return `<article class="task-submit-card" onclick="App.openTaskDetail('${r.task_id}')">
+      <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}">
+        <span class="task-submit-status task-submit-status--${statusClass}">${label}</span>
       </div>
-      <div class="task-media-card-body">
-        <div class="task-media-card-head">
-          <h4>${title}</h4>
-          <span class="status-badge status-badge--${getRecordStatusClass(r.status)}" style="background:${bg};color:${fg}">${label}</span>
+      <div class="task-submit-body">
+        <h4 class="task-submit-title">${title}</h4>
+        <p class="task-submit-time">${formatRecordDate(r.shot_at)}</p>
+        <p class="task-submit-meta">${r.duration} | ${r.size}</p>
+        <div class="task-submit-actions">
+          <button type="button" class="task-submit-btn task-submit-btn--copy" onclick="event.stopPropagation();App.copyTicketId('${r.ticket_id || r.task_id}')">${copyIcon}<span>Copy ID</span></button>
+          ${canUndo ? `<button type="button" class="task-submit-btn task-submit-btn--undo" onclick="event.stopPropagation();App.promptUndo('${r.task_id}')">${undoIcon}<span>Undo</span></button>` : ''}
         </div>
-        <p class="task-media-time">${formatRecordDate(r.shot_at)}</p>
       </div>
     </article>`;
   },
@@ -1786,6 +2400,135 @@ const App = {
   refreshTaskList() {
     App.renderTaskList();
     toast('Refreshed');
+  },
+
+  openDailySummary() {
+    App.go('daily-summary');
+  },
+
+  shiftDailySummaryMonth(delta) {
+    const d = state.dailySummaryMonth;
+    state.dailySummaryMonth = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+    const daysInMonth = new Date(
+      state.dailySummaryMonth.getFullYear(),
+      state.dailySummaryMonth.getMonth() + 1,
+      0
+    ).getDate();
+    if (state.dailySummarySelectedDay > daysInMonth) {
+      state.dailySummarySelectedDay = daysInMonth;
+    }
+    App.renderDailySummary();
+  },
+
+  selectDailySummaryDay(day) {
+    state.dailySummarySelectedDay = day;
+    App.renderDailySummary();
+  },
+
+  renderDailySummary() {
+    const el = document.getElementById('daily-summary-body');
+    if (!el) return;
+
+    const monthDate = state.dailySummaryMonth;
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const monthLabel = monthDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    const monthData = getDailySummaryMonthData(year, month);
+    const stats = computeDailySummaryMonthStats(year, month);
+    const selected = state.dailySummarySelectedDay;
+    const selectedInfo = getDailySummaryDayInfo(year, month, selected);
+    const targets = state.dailySummaryTargets;
+    const kmPct = Math.min(100, Math.round((selectedInfo.km / targets.km) * 100));
+    const hoursPct = Math.min(100, Math.round((selectedInfo.hours / targets.hours) * 100));
+    const statusLabel = formatDailySummaryStatus(selectedInfo.status);
+    const detailTitle = formatDailySummaryDetailTitle(year, month, selected);
+
+    let cells = '';
+    for (let i = 0; i < firstDow; i += 1) {
+      cells += '<div class="daily-cell daily-cell--blank"></div>';
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const info = monthData[day] || { status: 'empty', km: 0, hours: 0 };
+      const isSelected = day === selected;
+      const hasMetrics = ['pass', 'fail', 'progress'].includes(info.status);
+      const kmLine = hasMetrics ? `${info.km.toFixed(1)}km` : '';
+      const hoursLine = hasMetrics ? `${info.hours.toFixed(1)}h` : '';
+      cells += `<button type="button" class="daily-cell daily-cell--${info.status}${isSelected ? ' is-selected' : ''}" onclick="App.selectDailySummaryDay(${day})" aria-label="Day ${day}, ${formatDailySummaryStatus(info.status)}" aria-pressed="${isSelected}">
+        <span class="daily-cell-day">${day}</span>
+        <span class="daily-cell-icon-wrap">${renderDailySummaryStatusIcon(info.status)}</span>
+        <span class="daily-cell-meta">
+          <span class="daily-cell-meta-line">${kmLine || '&nbsp;'}</span>
+          <span class="daily-cell-meta-line">${hoursLine || '&nbsp;'}</span>
+        </span>
+      </button>`;
+    }
+
+    el.innerHTML = `
+      <div class="daily-month-stats">
+        <div class="daily-stat-card">
+          <span class="daily-stat-value">${stats.completed}</span>
+          <span class="daily-stat-label">Completed</span>
+        </div>
+        <div class="daily-stat-card">
+          <span class="daily-stat-value daily-stat-value--danger">${stats.failed}</span>
+          <span class="daily-stat-label">Missed</span>
+        </div>
+        <div class="daily-stat-card">
+          <span class="daily-stat-value">${stats.passRate}%</span>
+          <span class="daily-stat-label">Pass Rate</span>
+        </div>
+      </div>
+
+      <section class="daily-calendar-card" aria-label="Attendance calendar">
+        <div class="daily-summary-month">
+          <button type="button" class="daily-month-nav" onclick="App.shiftDailySummaryMonth(-1)" aria-label="Previous month">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <strong>${monthLabel}</strong>
+          <button type="button" class="daily-month-nav" onclick="App.shiftDailySummaryMonth(1)" aria-label="Next month">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+
+        <div class="daily-legend" aria-hidden="true">
+          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pass"></i>Completed</span>
+          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--fail"></i>Missed</span>
+          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pending"></i>Pending</span>
+        </div>
+
+        <div class="daily-weekdays">
+          <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+        </div>
+        <div class="daily-calendar-grid">${cells}</div>
+      </section>
+
+      <section class="daily-detail-card">
+        <h3 class="daily-detail-title">${detailTitle}</h3>
+        <div class="daily-detail-row">
+          <div class="daily-detail-head">
+            <span class="daily-detail-label">Daily KM</span>
+            <span class="daily-detail-value">${selectedInfo.km.toFixed(1)} km / ${targets.km} km</span>
+          </div>
+          <div class="daily-progress" role="progressbar" aria-valuenow="${kmPct}" aria-valuemin="0" aria-valuemax="100">
+            <span class="daily-progress-fill" style="width:${kmPct}%"></span>
+          </div>
+        </div>
+        <div class="daily-detail-row">
+          <div class="daily-detail-head">
+            <span class="daily-detail-label">Daily Hours</span>
+            <span class="daily-detail-value">${selectedInfo.hours.toFixed(1)} h / ${targets.hours} h</span>
+          </div>
+          <div class="daily-progress" role="progressbar" aria-valuenow="${hoursPct}" aria-valuemin="0" aria-valuemax="100">
+            <span class="daily-progress-fill" style="width:${hoursPct}%"></span>
+          </div>
+        </div>
+        <div class="daily-detail-status">
+          <span class="daily-detail-status-label">Status</span>
+          ${renderDailySummaryStatusBadge(selectedInfo.status, statusLabel)}
+        </div>
+      </section>`;
   },
 
   openTaskDetail(taskId) {
@@ -2007,22 +2750,60 @@ const App = {
 
 document.addEventListener('click', (e) => {
   const sheet = document.getElementById('filter-sheet');
-  if (sheet.classList.contains('show') && e.target === sheet) App.closeFilterSheet();
-  if (!e.target.closest('.layer-panel') && !e.target.closest('.layer-fab')) {
-    document.getElementById('progress-layer-panel').classList.remove('show');
+  if (sheet && sheet.classList.contains('show') && e.target === sheet) App.closeFilterSheet();
+  const layerPanel = document.getElementById('progress-layer-panel');
+  if (layerPanel && !e.target.closest('.layer-panel') && !e.target.closest('.layer-fab')) {
+    layerPanel.classList.remove('show');
   }
 });
 
 window.toast = toast;
 window.App = App;
-App.initLoginForm();
 
-const bootParams = new URLSearchParams(location.search);
-if (bootParams.get('checks') === 'fail' || bootParams.get('fail') === '1') {
-  state.settings.simulateFailedChecks = true;
-  applyFailedChecks();
+function bootApp() {
+  const bootParams = new URLSearchParams(location.search);
+  if (bootParams.get('checks') === 'fail' || bootParams.get('fail') === '1') {
+    state.settings.simulateFailedChecks = true;
+    applyFailedChecks();
+  }
+  if (bootParams.get('demo') === 'map') {
+    if (!state.settings.simulateFailedChecks) applyReadyChecks();
+    state.onboardingComplete = true;
+    App.showLoginScreen();
+    App.initLoginForm();
+    App.go('map');
+    return;
+  }
+  if (bootParams.get('demo') === 'precheck') {
+    state.auth = { region: 'US', userId: 'US-156', displayName: 'User Wang' };
+    App.showLoginScreen();
+    App.go('precheck');
+    return;
+  }
+  if (bootParams.get('precheckFail') === '1') {
+    state.precheckConnectFail = true;
+  }
+  if (bootParams.get('skipSplash') === '1') {
+    const splash = document.getElementById('screen-splash');
+    if (splash) {
+      splash.classList.remove('active');
+      splash.classList.add('is-dismissed');
+    }
+    App.showLoginScreen();
+    App.initLoginForm();
+    return;
+  }
+  App.startSplash();
 }
-if (bootParams.get('demo') === 'map') {
-  if (!state.settings.simulateFailedChecks) applyReadyChecks();
-  App.go('map');
+
+try {
+  bootApp();
+} catch (err) {
+  console.error('GoSnap boot failed', err);
+  App.showLoginScreen();
+  try {
+    App.initLoginForm();
+  } catch (initErr) {
+    console.error('initLoginForm failed during boot fallback', initErr);
+  }
 }
