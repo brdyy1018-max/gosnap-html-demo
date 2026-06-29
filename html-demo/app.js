@@ -215,6 +215,8 @@ const TASK_SHEET_NAV_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 11 18-8-8 18-2-7-8-3Z" stroke-linejoin="round"/></svg>';
 const TASK_SHEET_COPY_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+const TASK_SHEET_RELEASE_ICON =
+  '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 19h12M9 19V8.5l5.2-5.2a1 1 0 011.4 0l3.1 3.1a1 1 0 010 1.4L14 13.5V19" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 14.5h6" stroke-linecap="round"/></svg>';
 
 function renderTaskSheetLinks(t) {
   return `<div class="task-sheet-links">
@@ -2234,14 +2236,19 @@ const App = {
     const title = getTaskSheetTitle(t);
 
     let actions = '';
+    let actionClass = 'task-sheet-actions';
     if (inReview) {
       const status = t.review_status || 'awaiting';
       const cls =
         status === 'rejected' ? 'is-failed' : status === 'approved' ? 'is-success' : '';
       actions = `<button type="button" class="btn btn-submitted task-sheet-accept ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
     } else if (claimed) {
-      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.openBegin()">Begin</button>
-        <button type="button" class="task-sheet-release-link" onclick="App.releaseTask('${t.task_id}')">Release task</button>`;
+      actionClass += ' split';
+      actions = `<button type="button" class="task-release-btn" onclick="App.releaseTask('${t.task_id}')">
+        ${TASK_SHEET_RELEASE_ICON}
+        <span>Release</span>
+      </button>
+      <button type="button" class="task-sheet-begin" onclick="App.openBegin()">Begin</button>`;
     } else {
       actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
@@ -2252,7 +2259,7 @@ const App = {
         <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
         ${tags}
         ${links}
-        <div class="task-sheet-actions">${actions}</div>
+        <div class="${actionClass}">${actions}</div>
       </div>
     `;
   },
