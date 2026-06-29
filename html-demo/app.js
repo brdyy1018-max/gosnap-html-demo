@@ -278,6 +278,7 @@ const state = {
   shiftDistanceKm: 0,
   shiftDemoTimers: [],
   shiftStartPending: false,
+  shiftLongPressTriggered: false,
   activeRouteLayer: null,
   recordingAlertType: null,
   recordingAlertDismissed: {},
@@ -776,10 +777,9 @@ function updateMapStatsWidgets() {
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
       const btn = el.querySelector('.map-shift-btn');
       const actionEl = el.querySelector('[data-shift-action]');
-      const endBtn = el.querySelector('.map-shift-end');
+      const endBtn = el.querySelector('.map-shift-foot');
       const recDot = el.querySelector('[data-shift-rec-dot]');
-      const showEnd = state.shiftActive || state.shiftPaused;
-      if (endBtn) endBtn.classList.toggle('hidden', !showEnd);
+      if (endBtn) endBtn.classList.toggle('hidden', !state.shiftPaused);
       if (btn) {
         btn.setAttribute(
           'aria-pressed',
@@ -937,6 +937,39 @@ function bootDemoRecording(alertType) {
     syncMapTaskSheet();
     if (alertType) App.showRecordingAlert(alertType);
   }, 250);
+}
+
+function bindShiftControls() {
+  const btn = document.getElementById('map-shift-btn');
+  if (!btn || btn.dataset.shiftBound === '1') return;
+  btn.dataset.shiftBound = '1';
+
+  let pressTimer;
+
+  const clearPress = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  const onPressStart = (e) => {
+    if (!state.shiftActive || state.shiftPaused) return;
+    if (e.type === 'mousedown' && e.button !== 0) return;
+    clearPress();
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      state.shiftLongPressTriggered = true;
+      App.endShift();
+    }, 650);
+  };
+
+  btn.addEventListener('mousedown', onPressStart);
+  btn.addEventListener('touchstart', onPressStart, { passive: true });
+  btn.addEventListener('mouseup', clearPress);
+  btn.addEventListener('mouseleave', clearPress);
+  btn.addEventListener('touchend', clearPress);
+  btn.addEventListener('touchcancel', clearPress);
 }
 
 function enterMapScreen() {
@@ -2597,6 +2630,10 @@ const App = {
   },
 
   toggleShift() {
+    if (state.shiftLongPressTriggered) {
+      state.shiftLongPressTriggered = false;
+      return;
+    }
     if (state.shiftPaused) {
       if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
         toast('Finish or cancel the current task first');

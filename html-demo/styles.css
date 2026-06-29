@@ -2126,7 +2126,33 @@ body {
 }
 
 .map-shift-panel {
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.map-shift-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.map-shift-foot {
+  margin: 0 0 0 78px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #94a3b8;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.map-shift-foot:active {
+  color: #64748b;
 }
 
 .map-shift-btn {
@@ -2208,33 +2234,6 @@ body {
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
   border: 1px solid transparent;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.map-shift-end {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: #fff;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
-  cursor: pointer;
-  pointer-events: auto;
-  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.map-shift-end svg {
-  display: block;
-}
-
-.map-shift-end:active {
-  transform: scale(0.94);
-  color: #ef4444;
-  background: #fef2f2;
 }
 
 .map-shift-panel.is-paused .map-hud-distance {

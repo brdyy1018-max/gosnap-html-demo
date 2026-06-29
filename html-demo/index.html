@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260629z" />
+    <link rel="stylesheet" href="styles.css?v=20260630a" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -292,38 +292,37 @@
             <div class="nav-dist">2.5 km</div>
           </div>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
-            <button
-              type="button"
-              class="map-shift-btn"
-              id="map-shift-btn"
-              onclick="App.toggleShift()"
-              aria-pressed="false"
-              aria-label="Start shift"
-            >
-              <span class="map-shift-btn-text" data-shift-action>Start</span>
-            </button>
-            <div class="map-hud-distance" aria-live="polite">
-              <span class="map-hud-rec-dot hidden" data-shift-rec-dot aria-hidden="true"></span>
-              <div class="map-hud-stat">
-                <span class="map-hud-distance-value" data-stat="distance">0 km</span>
-                <span class="map-hud-distance-label" data-stat="distance-label">Total Distance</span>
-              </div>
-              <span class="map-hud-stat-divider" aria-hidden="true"></span>
-              <div class="map-hud-stat">
-                <span class="map-hud-distance-value" data-stat="tasks">0/10</span>
-                <span class="map-hud-distance-label" data-stat="tasks-label">Tasks Done</span>
+            <div class="map-shift-row">
+              <button
+                type="button"
+                class="map-shift-btn"
+                id="map-shift-btn"
+                onclick="App.toggleShift()"
+                aria-pressed="false"
+                aria-label="Start shift"
+              >
+                <span class="map-shift-btn-text" data-shift-action>Start</span>
+              </button>
+              <div class="map-hud-distance" aria-live="polite">
+                <span class="map-hud-rec-dot hidden" data-shift-rec-dot aria-hidden="true"></span>
+                <div class="map-hud-stat">
+                  <span class="map-hud-distance-value" data-stat="distance">0 km</span>
+                  <span class="map-hud-distance-label" data-stat="distance-label">Total Distance</span>
+                </div>
+                <span class="map-hud-stat-divider" aria-hidden="true"></span>
+                <div class="map-hud-stat">
+                  <span class="map-hud-distance-value" data-stat="tasks">0/10</span>
+                  <span class="map-hud-distance-label" data-stat="tasks-label">Tasks Done</span>
+                </div>
               </div>
             </div>
             <button
               type="button"
-              class="map-shift-end hidden"
+              class="map-shift-foot hidden"
               id="map-shift-end"
               onclick="App.endShift()"
-              aria-label="End shift"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
-              </svg>
+              End shift
             </button>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
