@@ -957,7 +957,7 @@ function bindShiftControls() {
     const moved = shiftDragState.moved;
     shiftDragState = null;
     btn.style.transform = '';
-    btn.classList.remove('is-dragging');
+    btn.classList.remove('is-dragging', 'is-drag-hidden');
     wrap.classList.remove('is-dragging', 'is-drop-ready');
     stopZone.classList.add('hidden');
     stopZone.setAttribute('aria-hidden', 'true');
@@ -985,20 +985,21 @@ function bindShiftControls() {
     const offsetY = Math.max(0, Math.min(72, e.clientY - shiftDragState.startY));
     if (offsetY > 6) shiftDragState.moved = true;
     shiftDragState.offsetY = offsetY;
-    btn.style.transform = `translateY(${offsetY}px)`;
+    const revealStop = offsetY > SHIFT_DRAG_SHOW_STOP;
     btn.classList.toggle('is-dragging', offsetY > 6);
+    btn.classList.toggle('is-drag-hidden', revealStop);
+    btn.style.transform = revealStop ? '' : `translateY(${offsetY}px)`;
 
-    if (offsetY > SHIFT_DRAG_SHOW_STOP) {
+    if (revealStop) {
       wrap.classList.add('is-dragging');
       stopZone.classList.remove('hidden');
       stopZone.setAttribute('aria-hidden', 'false');
+      wrap.classList.toggle('is-drop-ready', offsetY >= SHIFT_DRAG_END_THRESHOLD);
     } else {
       wrap.classList.remove('is-dragging', 'is-drop-ready');
       stopZone.classList.add('hidden');
       stopZone.setAttribute('aria-hidden', 'true');
     }
-
-    wrap.classList.toggle('is-drop-ready', offsetY >= SHIFT_DRAG_END_THRESHOLD);
   });
 
   const finishDrag = (e) => {
