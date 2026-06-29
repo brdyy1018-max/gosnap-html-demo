@@ -218,6 +218,27 @@ const TASK_SHEET_COPY_ICON =
 const TASK_SHEET_RELEASE_ICON =
   '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 19h12M9 19V8.5l5.2-5.2a1 1 0 011.4 0l3.1 3.1a1 1 0 010 1.4L14 13.5V19" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 14.5h6" stroke-linecap="round"/></svg>';
 
+const RECORDING_ALERTS = {
+  device_disconnect: {
+    title: 'GoPro Disconnected',
+    body: 'The camera lost its Bluetooth connection during recording. Recording is paused — reconnect your GoPro to continue.',
+    primary: 'Reconnect Device',
+    icon: '📷',
+  },
+  storage_full: {
+    title: 'Run Out Of Memory',
+    body: 'Your GoPro storage is full. Recording is paused — free up space before you can continue.',
+    primary: 'Open Storage Settings',
+    icon: '💾',
+  },
+  wifi_lost: {
+    title: 'WiFi Connection Lost',
+    body: 'The camera WiFi dropped during recording. Recording is paused — reconnect to resume syncing.',
+    primary: 'Reconnect WiFi',
+    icon: '📡',
+  },
+};
+
 function renderTaskSheetLinks(t) {
   return `<div class="task-sheet-links">
     <button type="button" class="task-sheet-link" onclick="toast('Opening Google Maps…')">
@@ -256,6 +277,10 @@ const state = {
   shiftStartPending: false,
   activeRouteLayer: null,
   mapAlertDismissed: false,
+  recordingAlertType: null,
+  recordingAlertDismissed: {},
+  recordingPausedByAlert: false,
+  recordingDeviceFault: null,
   captureRestMode: false,
   skipSafety: false,
   deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
@@ -848,6 +873,52 @@ const SHIFT_DEMO_TASK_ID = 'task_vermont_001';
 function syncMapTaskSheet() {
   App.renderTaskSheet();
   App.updateMapChrome();
+}
+
+function pauseRecordingForAlert() {
+  if (state.recInterval) {
+    clearInterval(state.recInterval);
+    state.recInterval = null;
+  }
+  state.recordingPausedByAlert = true;
+}
+
+function resumeRecordingAfterAlert() {
+  if (!state.recordingPausedByAlert || state.mapMode !== 'recording') return;
+  state.recordingPausedByAlert = false;
+  if (!state.recInterval) state.recInterval = setInterval(App.tickRec, 1000);
+}
+
+function bootDemoRecording(alertType) {
+  applyReadyChecks();
+  state.onboardingComplete = true;
+  state.shiftActive = true;
+  state.shiftPaused = false;
+  state.mapAlertDismissed = false;
+  state.recordingAlertDismissed = {};
+  state.recordingDeviceFault = null;
+
+  const task = state.mapTasks.find((t) => t.task_id === 'task_hollywood_009') || state.mapTasks[0];
+  if (task) {
+    state.selectedTaskId = task.task_id;
+    task.display_state = 'claimed';
+    task.claimed_by_me = true;
+  }
+
+  state.mapMode = 'recording';
+  state.recSeconds = alertType === 'storage_full' ? 498 : 42;
+  clearInterval(state.recInterval);
+  state.recInterval = setInterval(App.tickRec, 1000);
+  state.recordingPausedByAlert = false;
+
+  App.showLoginScreen();
+  App.initLoginForm();
+  App.go('map');
+  setTimeout(() => {
+    App.renderMapTasks();
+    syncMapTaskSheet();
+    if (alertType) App.showRecordingAlert(alertType);
+  }, 250);
 }
 
 function enterMapScreen() {
@@ -2042,8 +2113,12 @@ const App = {
     }
 
     const showMemoryAlert =
-      state.mapMode === 'recording' && state.recSeconds >= 497 && !state.mapAlertDismissed;
-    mapAlert.classList.toggle('hidden', !showMemoryAlert);
+      state.mapMode === 'recording' &&
+      state.recSeconds >= 15 &&
+      !state.recordingAlertDismissed.storage_full &&
+      !state.recordingAlertType;
+    if (showMemoryAlert) App.showRecordingAlert('storage_full');
+    mapAlert.classList.add('hidden');
 
     const showRest = state.mapMode === 'recording' && state.recSeconds >= 995;
     document.getElementById('map-float-rest').classList.toggle('hidden', !showRest);
@@ -2051,7 +2126,21 @@ const App = {
 
     const deviceBattBolt = document.getElementById('device-batt-bolt');
 
-    if (state.mapMode === 'recording') {
+    if (state.recordingDeviceFault === 'device_disconnect') {
+      deviceDot.className = 'device-dot err';
+      deviceConn.textContent = 'DISCONNECTED';
+      deviceBatt.textContent = '78';
+      deviceBattWrap.className = 'device-batt-wrap warn';
+      statusBar.classList.remove('is-online');
+      deviceSignal.dataset.level = '1';
+    } else if (state.recordingDeviceFault === 'wifi_lost') {
+      deviceDot.className = 'device-dot err';
+      deviceConn.textContent = 'NO WIFI';
+      deviceBatt.textContent = '78';
+      deviceBattWrap.className = 'device-batt-wrap warn has-bolt';
+      statusBar.classList.remove('is-online');
+      deviceSignal.dataset.level = '0';
+    } else if (state.mapMode === 'recording') {
       deviceDot.className = 'device-dot err';
       deviceConn.textContent = 'REC';
       deviceBatt.textContent = '78';
@@ -2400,6 +2489,10 @@ const App = {
     state.mapMode = 'idle';
     state.recSeconds = 0;
     state.mapAlertDismissed = false;
+    state.recordingAlertType = null;
+    state.recordingAlertDismissed = {};
+    state.recordingPausedByAlert = false;
+    state.recordingDeviceFault = null;
     state.captureRestMode = false;
     App.renderMapTasks();
     App.renderTaskSheet();
@@ -2409,7 +2502,63 @@ const App = {
 
   dismissMapAlert() {
     state.mapAlertDismissed = true;
-    document.getElementById('map-alert').classList.add('hidden');
+    document.getElementById('map-alert')?.classList.add('hidden');
+  },
+
+  showRecordingAlert(type) {
+    const config = RECORDING_ALERTS[type];
+    if (!config) return;
+
+    state.recordingAlertType = type;
+    if (['device_disconnect', 'wifi_lost'].includes(type)) {
+      state.recordingDeviceFault = type === 'device_disconnect' ? 'device_disconnect' : 'wifi_lost';
+    }
+
+    if (state.mapMode === 'recording') pauseRecordingForAlert();
+
+    document.getElementById('recording-alert-icon').textContent = config.icon;
+    document.getElementById('recording-alert-title').textContent = config.title;
+    document.getElementById('recording-alert-body').textContent = config.body;
+    document.getElementById('recording-alert-primary').textContent = config.primary;
+    document.getElementById('modal-recording-alert').classList.add('show');
+    App.updateMapChrome();
+  },
+
+  previewRecordingAlert(type) {
+    if (!['navigating', 'recording', 'completing'].includes(state.mapMode)) {
+      bootDemoRecording(type);
+      return;
+    }
+    App.showRecordingAlert(type);
+  },
+
+  dismissRecordingAlert() {
+    if (state.recordingAlertType) {
+      state.recordingAlertDismissed[state.recordingAlertType] = true;
+    }
+    state.recordingAlertType = null;
+    state.recordingDeviceFault = null;
+    App.closeModal('modal-recording-alert');
+    resumeRecordingAfterAlert();
+    App.updateMapChrome();
+  },
+
+  handleRecordingAlertPrimary() {
+    const type = state.recordingAlertType;
+    App.dismissRecordingAlert();
+
+    if (type === 'device_disconnect') {
+      App.prepareBluetoothModal();
+      document.getElementById('modal-bluetooth').classList.add('show');
+      return;
+    }
+    if (type === 'storage_full') {
+      document.getElementById('modal-storage-settings').classList.add('show');
+      return;
+    }
+    if (type === 'wifi_lost') {
+      document.getElementById('modal-network').classList.add('show');
+    }
   },
 
   toggleCaptureRest() {
@@ -3044,6 +3193,17 @@ function bootApp() {
     App.showLoginScreen();
     App.initLoginForm();
     App.go('map');
+    return;
+  }
+  if (bootParams.get('demo') === 'recording') {
+    const alertMap = {
+      disconnect: 'device_disconnect',
+      storage: 'storage_full',
+      memory: 'storage_full',
+      wifi: 'wifi_lost',
+    };
+    const alert = alertMap[bootParams.get('alert')] || null;
+    bootDemoRecording(alert);
     return;
   }
   if (bootParams.get('demo') === 'precheck') {

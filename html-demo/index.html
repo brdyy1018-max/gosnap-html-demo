@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260629t" />
+    <link rel="stylesheet" href="styles.css?v=20260629u" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -531,6 +531,23 @@
             </div>
           </div>
 
+          <h3 class="settings-section-title">Recording Alerts (Demo)</h3>
+          <p class="settings-demo-hint">Preview interruption dialogs during recording. If you are not recording, the demo jumps into a sample capture first.</p>
+          <div class="settings-group">
+            <div class="settings-row" onclick="App.previewRecordingAlert('device_disconnect')">
+              <span class="settings-row-left">Preview: GoPro Disconnected</span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
+            </div>
+            <div class="settings-row" onclick="App.previewRecordingAlert('storage_full')">
+              <span class="settings-row-left">Preview: Storage Full</span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
+            </div>
+            <div class="settings-row" onclick="App.previewRecordingAlert('wifi_lost')">
+              <span class="settings-row-left">Preview: WiFi Lost</span>
+              <span class="settings-row-chevron" aria-hidden="true">›</span>
+            </div>
+          </div>
+
           <div class="settings-group">
             <div class="settings-row settings-row--logout" onclick="App.openLogoutModal()">
               <span class="settings-row-left">
@@ -795,6 +812,18 @@
       </div>
     </div>
 
+    <div class="overlay overlay-center" id="modal-recording-alert">
+      <div class="modal modal-recording-alert">
+        <div class="modal-recording-alert-icon" id="recording-alert-icon" aria-hidden="true">⚠</div>
+        <h3 id="recording-alert-title">GoPro Disconnected</h3>
+        <p id="recording-alert-body">The camera lost its Bluetooth connection during recording.</p>
+        <div class="modal-confirm-actions modal-confirm-actions--stack">
+          <button type="button" class="btn btn-primary" id="recording-alert-primary" onclick="App.handleRecordingAlertPrimary()">Reconnect Device</button>
+          <button type="button" class="btn btn-ghost" onclick="App.dismissRecordingAlert()">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="modal-terminate-recording">
       <div class="modal modal-confirm">
         <h3>Pause or end shift?</h3>
@@ -850,7 +879,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260629t"></script>
+    <script src="app.js?v=20260629u"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
