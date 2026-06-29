@@ -58,21 +58,6 @@
         </div>
         <div class="login-card" id="login-form">
           <div class="login-field">
-            <label for="login-region">Region</label>
-            <div class="login-input-wrap is-empty" id="login-region-wrap">
-              <span class="login-input-icon login-input-icon--globe" id="region-globe" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.8 4 6 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8"/></svg>
-              </span>
-              <span class="login-region-flag hidden" id="region-flag" aria-hidden="true"></span>
-              <select id="login-region" aria-label="Region" onchange="App.onRegionChange()" onfocus="App.onRegionFocus(true)" onblur="App.onRegionFocus(false)">
-                <option value="">Country</option>
-              </select>
-              <button type="button" class="login-clear hidden" id="region-clear" onclick="App.clearRegion()" aria-label="Clear region">×</button>
-              <span class="login-valid hidden" id="region-check" aria-hidden="true">✓</span>
-              <span class="login-region-help hidden" id="region-help" aria-hidden="true">?</span>
-            </div>
-          </div>
-          <div class="login-field">
             <label for="login-user">Username</label>
             <div class="login-input-wrap" id="login-user-wrap">
               <span class="login-input-icon" aria-hidden="true">
@@ -94,7 +79,7 @@
               </button>
             </div>
           </div>
-          <p class="login-error hidden" id="login-error">Invalid region, user ID, or password.</p>
+          <p class="login-error hidden" id="login-error">Invalid user ID or password.</p>
           <button class="btn btn-primary login-submit" type="button" onclick="event.stopPropagation(); App.login()">Sign In</button>
         </div>
         <div class="login-home-indicator" aria-hidden="true"></div>
@@ -867,7 +852,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260626i"></script>
+    <script src="app.js?v=20260626j"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

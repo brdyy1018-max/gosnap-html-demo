@@ -55,9 +55,7 @@ const BOTTOM_NAV_TAB_FOR_SCREEN = {
   settings: 'settings',
 };
 
-/** Demo credentials — region + user ID + password must all match */
-const LOGIN_REGIONS = ['US', 'UK', 'SG'];
-const REGION_FLAGS = { US: '🇺🇸', UK: '🇬🇧', SG: '🇸🇬' };
+/** Demo credentials — user ID + password must match */
 const DEMO_ACCOUNTS = [
   { region: 'US', userId: 'US-156', password: 'demo123', displayName: 'User Wang' },
   { region: 'UK', userId: 'UK-088', password: 'demo123', displayName: 'User Smith' },
@@ -1221,32 +1219,22 @@ const App = {
   },
 
   login() {
-    const region = document.getElementById('login-region').value;
     const userId = document.getElementById('login-user').value.trim();
     const password = document.getElementById('login-pass').value;
 
-    if (!region) {
-      document.getElementById('login-region-wrap').classList.add('is-error');
-      App.showLoginError('Please select a region.');
-      return;
-    }
     if (!userId || !password) {
       App.showLoginError('Enter your user ID and password.');
       return;
     }
 
     const account = DEMO_ACCOUNTS.find(
-      (a) =>
-        a.region === region &&
-        (a.userId === userId || a.displayName === userId) &&
-        a.password === password
+      (a) => (a.userId === userId || a.displayName === userId) && a.password === password
     );
 
     if (!account) {
-      document.getElementById('login-region-wrap').classList.add('is-error');
       document.getElementById('login-user-wrap').classList.add('is-error');
       document.getElementById('login-pass-wrap').classList.add('is-error');
-      App.showLoginError('Invalid region, user ID, or password.');
+      App.showLoginError('Invalid user ID or password.');
       return;
     }
 
@@ -1292,24 +1280,11 @@ const App = {
   },
 
   initLoginForm() {
-    const select = document.getElementById('login-region');
-    if (!select) return;
-    if (!select.dataset.initialized) {
-      LOGIN_REGIONS.forEach((code) => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = code;
-        select.appendChild(opt);
-      });
-      select.dataset.initialized = '1';
-    }
     const defaultAccount = DEMO_ACCOUNTS[0];
-    select.value = defaultAccount.region;
     const userInput = document.getElementById('login-user');
     const passInput = document.getElementById('login-pass');
     if (userInput) userInput.value = defaultAccount.userId;
     if (passInput) passInput.value = defaultAccount.password;
-    App.onRegionChange();
     App.onPassInput();
   },
 
@@ -1422,46 +1397,8 @@ const App = {
     toast('This is the latest version');
   },
 
-  onRegionChange() {
-    const select = document.getElementById('login-region');
-    const wrap = document.getElementById('login-region-wrap');
-    if (!select || !wrap) return;
-    const region = select.value;
-    const check = document.getElementById('region-check');
-    const flag = document.getElementById('region-flag');
-    const clearBtn = document.getElementById('region-clear');
-    const help = document.getElementById('region-help');
-    const valid = !!region;
-    wrap.classList.toggle('is-empty', !region);
-    wrap.classList.toggle('is-valid', valid);
-    wrap.classList.toggle('has-region', valid);
-    check?.classList.toggle('hidden', !valid || wrap.classList.contains('is-error'));
-    clearBtn?.classList.toggle('hidden', !valid);
-    help?.classList.toggle('hidden', !wrap.classList.contains('is-error'));
-    if (flag) {
-      flag.textContent = REGION_FLAGS[region] || '';
-      flag.classList.toggle('hidden', !valid);
-    }
-    const account = DEMO_ACCOUNTS.find((a) => a.region === region);
-    const userInput = document.getElementById('login-user');
-    if (account && userInput && !userInput.dataset.edited) {
-      userInput.value = account.displayName;
-    }
-  },
-
-  onRegionFocus(focused) {
-    document.getElementById('login-region-wrap').classList.toggle('is-focused', focused);
-  },
-
   onUserFocus(focused) {
     document.getElementById('login-user-wrap').classList.toggle('is-focused', focused);
-  },
-
-  clearRegion() {
-    const select = document.getElementById('login-region');
-    select.value = '';
-    App.onRegionChange();
-    select.focus();
   },
 
   onPassInput() {
@@ -1488,21 +1425,13 @@ const App = {
     el.textContent = msg;
     el.classList.remove('hidden');
     document.getElementById('login-form').classList.add('has-error');
-    const regionWrap = document.getElementById('login-region-wrap');
-    if (regionWrap.classList.contains('is-error')) {
-      document.getElementById('region-help').classList.remove('hidden');
-      document.getElementById('region-check').classList.add('hidden');
-    }
   },
 
   clearLoginError() {
     document.getElementById('login-error').classList.add('hidden');
     document.getElementById('login-form').classList.remove('has-error');
-    document.getElementById('login-region-wrap').classList.remove('is-error');
     document.getElementById('login-user-wrap').classList.remove('is-error');
     document.getElementById('login-pass-wrap').classList.remove('is-error');
-    document.getElementById('region-help').classList.add('hidden');
-    App.onRegionChange();
   },
 
   toggleLoginPass() {
@@ -2462,8 +2391,6 @@ const App = {
     stopBackgroundRecording();
     document.getElementById('login-user').value = '';
     document.getElementById('login-pass').value = '';
-    document.getElementById('login-region').value = '';
-    App.onRegionChange();
     App.onPassInput();
     App.clearLoginError();
     App.initLoginForm();
