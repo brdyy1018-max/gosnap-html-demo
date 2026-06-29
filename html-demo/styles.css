@@ -2064,19 +2064,21 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  margin: 0;
-  padding: 0;
   z-index: 710;
-  max-height: none;
-  overflow: hidden;
-  background: #fff;
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.12);
+  padding: 0 12px 12px;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.phone.has-bottom-nav #screen-map.active #task-sheet.task-sheet:not(.hidden) {
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+.task-sheet-card {
+  pointer-events: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.14);
+  padding: 20px;
 }
 
 /* Shift recording state is integrated into the map HUD (no top bar). */
@@ -2902,11 +2904,11 @@ body {
   width: 100%;
   height: 52px;
   border-radius: 14px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   border: none;
   box-shadow: none;
-  background: var(--primary);
+  background: #1a66ff;
   color: #fff;
 }
 
