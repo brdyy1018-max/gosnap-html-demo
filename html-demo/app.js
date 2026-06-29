@@ -941,15 +941,15 @@ function canDragShiftToStop() {
   return state.shiftActive || state.shiftPaused;
 }
 
-const SHIFT_DRAG_SHOW_STOP = 18;
-const SHIFT_DRAG_END_THRESHOLD = 58;
+const SHIFT_DRAG_MORPH_THRESHOLD = 22;
+const SHIFT_DRAG_END_THRESHOLD = 56;
 let shiftDragState = null;
 
 function bindShiftControls() {
   const btn = document.getElementById('map-shift-btn');
   const wrap = document.getElementById('map-shift-drag');
-  const stopZone = document.getElementById('map-shift-stop-zone');
-  if (!btn || !wrap || !stopZone || btn.dataset.shiftBound === '1') return;
+  const actionEl = btn?.querySelector('[data-shift-action]');
+  if (!btn || !wrap || btn.dataset.shiftBound === '1') return;
   btn.dataset.shiftBound = '1';
 
   const resetShiftDrag = (commit) => {
@@ -957,11 +957,11 @@ function bindShiftControls() {
     const moved = shiftDragState.moved;
     shiftDragState = null;
     btn.style.transform = '';
-    btn.classList.remove('is-dragging', 'is-drag-hidden');
-    wrap.classList.remove('is-dragging', 'is-drop-ready');
-    stopZone.classList.add('hidden');
-    stopZone.setAttribute('aria-hidden', 'true');
+    btn.classList.remove('is-dragging', 'is-drag-stop', 'is-drop-ready');
+    wrap.classList.remove('is-dragging');
+    updateMapStatsWidgets();
     if (commit) {
+      state.shiftDragSuppressClick = true;
       App.endShift();
       return;
     }
@@ -982,24 +982,20 @@ function bindShiftControls() {
 
   btn.addEventListener('pointermove', (e) => {
     if (!shiftDragState || e.pointerId !== shiftDragState.pointerId) return;
-    const offsetY = Math.max(0, Math.min(72, e.clientY - shiftDragState.startY));
+    const offsetY = Math.max(0, Math.min(68, e.clientY - shiftDragState.startY));
     if (offsetY > 6) shiftDragState.moved = true;
     shiftDragState.offsetY = offsetY;
-    const revealStop = offsetY > SHIFT_DRAG_SHOW_STOP;
-    btn.classList.toggle('is-dragging', offsetY > 6);
-    btn.classList.toggle('is-drag-hidden', revealStop);
-    btn.style.transform = revealStop ? '' : `translateY(${offsetY}px)`;
+    const morphStop = offsetY >= SHIFT_DRAG_MORPH_THRESHOLD;
+    const dropReady = offsetY >= SHIFT_DRAG_END_THRESHOLD;
 
-    if (revealStop) {
-      wrap.classList.add('is-dragging');
-      stopZone.classList.remove('hidden');
-      stopZone.setAttribute('aria-hidden', 'false');
-      wrap.classList.toggle('is-drop-ready', offsetY >= SHIFT_DRAG_END_THRESHOLD);
-    } else {
-      wrap.classList.remove('is-dragging', 'is-drop-ready');
-      stopZone.classList.add('hidden');
-      stopZone.setAttribute('aria-hidden', 'true');
-    }
+    btn.classList.toggle('is-dragging', offsetY > 6);
+    btn.classList.toggle('is-drag-stop', morphStop);
+    btn.classList.toggle('is-drop-ready', dropReady);
+    wrap.classList.toggle('is-dragging', offsetY > 6);
+    btn.style.transform = `translateY(${offsetY}px)`;
+
+    if (actionEl && morphStop) actionEl.textContent = 'Stop';
+    else if (actionEl) updateMapStatsWidgets();
   });
 
   const finishDrag = (e) => {
