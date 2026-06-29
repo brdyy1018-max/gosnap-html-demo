@@ -278,7 +278,7 @@ const state = {
   shiftDistanceKm: 0,
   shiftDemoTimers: [],
   shiftStartPending: false,
-  shiftLongPressTriggered: false,
+  shiftDragSuppressClick: false,
   activeRouteLayer: null,
   recordingAlertType: null,
   recordingAlertDismissed: {},
@@ -777,9 +777,7 @@ function updateMapStatsWidgets() {
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
       const btn = el.querySelector('.map-shift-btn');
       const actionEl = el.querySelector('[data-shift-action]');
-      const endBtn = el.querySelector('.map-shift-foot');
       const recDot = el.querySelector('[data-shift-rec-dot]');
-      if (endBtn) endBtn.classList.toggle('hidden', !state.shiftPaused);
       if (btn) {
         btn.setAttribute(
           'aria-pressed',
@@ -939,37 +937,79 @@ function bootDemoRecording(alertType) {
   }, 250);
 }
 
+function canDragShiftToStop() {
+  return state.shiftActive || state.shiftPaused;
+}
+
+const SHIFT_DRAG_SHOW_STOP = 18;
+const SHIFT_DRAG_END_THRESHOLD = 58;
+let shiftDragState = null;
+
 function bindShiftControls() {
   const btn = document.getElementById('map-shift-btn');
-  if (!btn || btn.dataset.shiftBound === '1') return;
+  const wrap = document.getElementById('map-shift-drag');
+  const stopZone = document.getElementById('map-shift-stop-zone');
+  if (!btn || !wrap || !stopZone || btn.dataset.shiftBound === '1') return;
   btn.dataset.shiftBound = '1';
 
-  let pressTimer;
-
-  const clearPress = () => {
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  };
-
-  const onPressStart = (e) => {
-    if (!state.shiftActive || state.shiftPaused) return;
-    if (e.type === 'mousedown' && e.button !== 0) return;
-    clearPress();
-    pressTimer = setTimeout(() => {
-      pressTimer = null;
-      state.shiftLongPressTriggered = true;
+  const resetShiftDrag = (commit) => {
+    if (!shiftDragState) return;
+    const moved = shiftDragState.moved;
+    shiftDragState = null;
+    btn.style.transform = '';
+    btn.classList.remove('is-dragging');
+    wrap.classList.remove('is-dragging', 'is-drop-ready');
+    stopZone.classList.add('hidden');
+    stopZone.setAttribute('aria-hidden', 'true');
+    if (commit) {
       App.endShift();
-    }, 650);
+      return;
+    }
+    if (moved) state.shiftDragSuppressClick = true;
   };
 
-  btn.addEventListener('mousedown', onPressStart);
-  btn.addEventListener('touchstart', onPressStart, { passive: true });
-  btn.addEventListener('mouseup', clearPress);
-  btn.addEventListener('mouseleave', clearPress);
-  btn.addEventListener('touchend', clearPress);
-  btn.addEventListener('touchcancel', clearPress);
+  btn.addEventListener('pointerdown', (e) => {
+    if (!canDragShiftToStop()) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    shiftDragState = {
+      startY: e.clientY,
+      offsetY: 0,
+      moved: false,
+      pointerId: e.pointerId,
+    };
+    btn.setPointerCapture(e.pointerId);
+  });
+
+  btn.addEventListener('pointermove', (e) => {
+    if (!shiftDragState || e.pointerId !== shiftDragState.pointerId) return;
+    const offsetY = Math.max(0, Math.min(72, e.clientY - shiftDragState.startY));
+    if (offsetY > 6) shiftDragState.moved = true;
+    shiftDragState.offsetY = offsetY;
+    btn.style.transform = `translateY(${offsetY}px)`;
+    btn.classList.toggle('is-dragging', offsetY > 6);
+
+    if (offsetY > SHIFT_DRAG_SHOW_STOP) {
+      wrap.classList.add('is-dragging');
+      stopZone.classList.remove('hidden');
+      stopZone.setAttribute('aria-hidden', 'false');
+    } else {
+      wrap.classList.remove('is-dragging', 'is-drop-ready');
+      stopZone.classList.add('hidden');
+      stopZone.setAttribute('aria-hidden', 'true');
+    }
+
+    wrap.classList.toggle('is-drop-ready', offsetY >= SHIFT_DRAG_END_THRESHOLD);
+  });
+
+  const finishDrag = (e) => {
+    if (!shiftDragState || e.pointerId !== shiftDragState.pointerId) return;
+    const commit = shiftDragState.offsetY >= SHIFT_DRAG_END_THRESHOLD;
+    if (btn.hasPointerCapture(e.pointerId)) btn.releasePointerCapture(e.pointerId);
+    resetShiftDrag(commit);
+  };
+
+  btn.addEventListener('pointerup', finishDrag);
+  btn.addEventListener('pointercancel', finishDrag);
 }
 
 function enterMapScreen() {
@@ -2240,6 +2280,7 @@ const App = {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
     }).addTo(state.map);
+    bindShiftControls();
     App.renderMapTasks();
   },
 
@@ -2630,8 +2671,8 @@ const App = {
   },
 
   toggleShift() {
-    if (state.shiftLongPressTriggered) {
-      state.shiftLongPressTriggered = false;
+    if (state.shiftDragSuppressClick) {
+      state.shiftDragSuppressClick = false;
       return;
     }
     if (state.shiftPaused) {
@@ -3233,6 +3274,7 @@ function bootApp() {
 }
 
 try {
+  bindShiftControls();
   bootApp();
 } catch (err) {
   console.error('GoSnap boot failed', err);

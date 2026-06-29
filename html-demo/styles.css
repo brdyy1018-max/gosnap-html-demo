@@ -2118,44 +2118,77 @@ body {
   top: 58px;
   left: 10px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   z-index: 620;
   pointer-events: none;
   transition: top 0.2s ease, filter 0.2s ease;
   filter: drop-shadow(0 2px 10px rgba(15, 23, 42, 0.14));
+  overflow: visible;
 }
 
 .map-shift-panel {
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  overflow: visible;
 }
 
 .map-shift-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0;
+  overflow: visible;
 }
 
-.map-shift-foot {
-  margin: 0 0 0 78px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #94a3b8;
-  pointer-events: auto;
-  cursor: pointer;
+.map-shift-drag {
+  position: relative;
+  width: 74px;
+  min-height: 74px;
+  flex-shrink: 0;
+  z-index: 2;
+  overflow: visible;
 }
 
-.map-shift-foot:active {
-  color: #64748b;
+.map-shift-stop-zone {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  width: 74px;
+  height: 74px;
+  transform: translateX(-50%) scale(0.94);
+  border-radius: 50%;
+  background: #fff;
+  border: 3px dashed #fca5a5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
+}
+
+.map-shift-stop-zone span {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ef4444;
+  letter-spacing: -0.02em;
+}
+
+.map-shift-drag.is-dragging .map-shift-stop-zone:not(.hidden) {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.map-shift-drag.is-drop-ready .map-shift-stop-zone {
+  border-color: #ef4444;
+  border-style: solid;
+  background: #fef2f2;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
 }
 
 .map-shift-btn {
+  position: relative;
+  z-index: 2;
   width: 74px;
   height: 74px;
   border-radius: 50%;
@@ -2165,16 +2198,21 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  z-index: 2;
   box-sizing: border-box;
   pointer-events: auto;
   cursor: pointer;
   font-family: inherit;
   padding: 0;
+  touch-action: none;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.map-shift-btn:active {
+.map-shift-btn.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.map-shift-btn:active:not(.is-dragging) {
   transform: scale(0.96);
 }
 

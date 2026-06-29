@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260630a" />
+    <link rel="stylesheet" href="styles.css?v=20260630b" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -293,16 +293,21 @@
           </div>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
             <div class="map-shift-row">
-              <button
-                type="button"
-                class="map-shift-btn"
-                id="map-shift-btn"
-                onclick="App.toggleShift()"
-                aria-pressed="false"
-                aria-label="Start shift"
-              >
-                <span class="map-shift-btn-text" data-shift-action>Start</span>
-              </button>
+              <div class="map-shift-drag" id="map-shift-drag">
+                <div class="map-shift-stop-zone hidden" id="map-shift-stop-zone" aria-hidden="true">
+                  <span>Stop</span>
+                </div>
+                <button
+                  type="button"
+                  class="map-shift-btn"
+                  id="map-shift-btn"
+                  onclick="App.toggleShift()"
+                  aria-pressed="false"
+                  aria-label="Start shift"
+                >
+                  <span class="map-shift-btn-text" data-shift-action>Start</span>
+                </button>
+              </div>
               <div class="map-hud-distance" aria-live="polite">
                 <span class="map-hud-rec-dot hidden" data-shift-rec-dot aria-hidden="true"></span>
                 <div class="map-hud-stat">
@@ -316,14 +321,6 @@
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              class="map-shift-foot hidden"
-              id="map-shift-end"
-              onclick="App.endShift()"
-            >
-              End shift
-            </button>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
             <button type="button" class="map-float-btn" onclick="App.exitCapture()">Close</button>
@@ -870,7 +867,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260629y"></script>
+    <script src="app.js?v=20260630b"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
