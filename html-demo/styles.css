@@ -377,10 +377,79 @@ body {
   justify-content: space-between;
   padding: 14px 4px;
   border-top: 1px solid #f1f5f9;
-  border-bottom: 1px solid #f1f5f9;
   font-size: 16px;
   font-weight: 500;
   color: #111827;
+}
+
+.device-connected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 2px;
+}
+
+.device-connected-list.hidden {
+  display: none;
+}
+
+.device-connected-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.device-connected-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+.device-connected-name {
+  flex: 1;
+}
+
+.device-connected-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a66ff;
+}
+
+.device-scan-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.device-scan-state--idle {
+  color: #94a3b8;
+}
+
+.device-scan-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #dbeafe;
+  border-top-color: #1a66ff;
+  animation: deviceScanSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes deviceScanSpin {
+  to { transform: rotate(360deg); }
 }
 
 .device-setup-pick,
@@ -1902,100 +1971,7 @@ body {
   background: var(--bg);
 }
 
-/* Background street scanning bar — subtle top indicator */
-.bg-recording-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 680;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  pointer-events: auto;
-}
-
-.bg-recording-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--danger);
-  animation: pulse 1.4s infinite;
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
-.bg-recording-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.bg-recording-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.bg-recording-stop {
-  border: none;
-  background: rgba(213, 73, 65, 0.08);
-  color: #b91c1c;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-.bg-recording-stop:active {
-  background: rgba(213, 73, 65, 0.16);
-}
-
-.map-wrap.has-bg-recording .map-top-chrome {
-  top: 36px;
-}
-
-.map-wrap.has-bg-recording .map-rail {
-  top: 98px;
-}
-
-.map-wrap.has-bg-recording .nav-banner {
-  top: 70px;
-}
-
-.map-wrap.has-bg-recording .map-stats-widget:not(.is-compact-top) {
-  top: 84px;
-}
-
-.map-wrap.has-bg-recording .map-stats-widget.is-compact-top {
-  top: 38px;
-}
-
-#screen-progress-map .map-wrap.has-bg-recording .map-stats-widget {
-  top: 40px;
-}
-
-.map-wrap.has-bg-recording .map-alert {
-  top: 158px;
-}
+/* Shift recording state is integrated into the map HUD (no top bar). */
 
 #screen-map.active {
   background: var(--bg);
@@ -2026,7 +2002,7 @@ body {
 .nav-turn { font-size: 22px; font-weight: 800; }
 .nav-dist { font-size: 18px; font-weight: 800; }
 
-/* Map HUD — task duration + total distance (speed/mileage style) */
+/* Map HUD — shift start/stop + total distance */
 .map-stats-widget {
   position: absolute;
   top: 58px;
@@ -2035,54 +2011,70 @@ body {
   align-items: center;
   z-index: 620;
   pointer-events: none;
-  transition: top 0.2s ease;
+  transition: top 0.2s ease, filter 0.2s ease;
   filter: drop-shadow(0 2px 10px rgba(15, 23, 42, 0.14));
 }
 
-.map-stats-widget.is-compact-top {
-  top: 12px;
+.map-shift-panel {
+  gap: 0;
 }
 
-.map-hud-time {
+.map-shift-btn {
   width: 74px;
   height: 74px;
   border-radius: 50%;
   background: #fff;
   border: 3px solid #2ba471;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
   flex-shrink: 0;
   z-index: 2;
   box-sizing: border-box;
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.map-hud-time-value {
-  font-size: 21px;
+.map-shift-btn:active {
+  transform: scale(0.96);
+}
+
+.map-shift-btn-text {
+  font-size: 15px;
   font-weight: 800;
   color: #2ba471;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.map-hud-time-value.is-long {
-  font-size: 15px;
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
-.map-hud-time-label {
-  max-width: 54px;
-  font-size: 8px;
-  font-weight: 700;
-  color: #2ba471;
-  line-height: 1.15;
-  text-align: center;
+.map-shift-panel:not(.is-on-shift) .map-shift-btn {
+  border-color: #2ba471;
+  box-shadow: 0 0 0 4px rgba(43, 164, 113, 0.14);
+}
+
+.map-shift-panel.is-on-shift .map-shift-btn {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.map-shift-panel.is-on-shift .map-shift-btn-text {
+  color: #ef4444;
+}
+
+.map-shift-panel.is-recording .map-hud-distance {
+  border: 1px solid rgba(43, 164, 113, 0.22);
+}
+
+.map-shift-panel.is-recording.is-task-overlay .map-hud-distance {
+  border-color: rgba(239, 68, 68, 0.28);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1), 0 2px 12px rgba(15, 23, 42, 0.1);
 }
 
 .map-hud-distance {
+  position: relative;
   margin-left: -18px;
   padding: 10px 16px 10px 26px;
   min-width: 112px;
@@ -2095,6 +2087,60 @@ body {
   justify-content: center;
   gap: 2px;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-hud-rec-dot {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2ba471;
+  box-shadow: 0 0 0 3px rgba(43, 164, 113, 0.22);
+  animation: mapHudRecPulse 2.4s ease-in-out infinite;
+}
+
+.map-shift-panel.is-task-overlay .map-hud-rec-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+  animation-name: mapHudRecPulseTask;
+}
+
+@keyframes mapHudRecPulse {
+  0%, 100% {
+    opacity: 0.65;
+    transform: scale(0.88);
+    box-shadow: 0 0 0 3px rgba(43, 164, 113, 0.16);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 5px rgba(43, 164, 113, 0.28);
+  }
+}
+
+@keyframes mapHudRecPulseTask {
+  0%, 100% {
+    opacity: 0.65;
+    transform: scale(0.88);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.28);
+  }
+}
+
+.map-shift-panel.is-task-overlay .map-hud-distance {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22), 0 2px 12px rgba(15, 23, 42, 0.1);
+}
+
+.map-stats-widget.is-compact-top {
+  top: 12px;
 }
 
 .map-hud-distance-value {
@@ -2111,6 +2157,11 @@ body {
   font-weight: 600;
   color: #64748b;
   line-height: 1.1;
+}
+
+.map-hud-distance--solo {
+  margin-left: 0;
+  padding: 10px 16px;
 }
 
 #screen-progress-map .map-stats-widget {
@@ -2525,6 +2576,14 @@ body {
   margin: 6px auto 14px;
 }
 
+.task-sheet-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .task-sheet-head {
   display: flex;
   align-items: flex-start;
@@ -2538,14 +2597,16 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 
 .task-tag {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.4px;
-  padding: 4px 10px;
-  border-radius: 6px;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
 .task-tag-high {
@@ -2556,6 +2617,52 @@ body {
 .task-tag-second {
   background: #ede9fe;
   color: #8b5cf6;
+}
+
+.task-tag-duration {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.task-sheet-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin: 14px 0 18px;
+}
+
+.task-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #1a66ff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.task-sheet-link svg {
+  flex-shrink: 0;
+}
+
+.task-sheet-release-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
 }
 
 .task-sheet-close {
@@ -2655,9 +2762,11 @@ body {
 }
 
 .task-sheet-accept {
+  width: 100%;
   height: 52px;
   border-radius: 14px;
   font-size: 17px;
+  font-weight: 700;
 }
 
 .task-sheet-actions.split {
@@ -2819,6 +2928,38 @@ body {
   border-bottom: none;
 }
 
+.tasks-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tasks-header-quiet-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tasks-header-quiet-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.tasks-header-quiet-btn:hover,
+.tasks-header-quiet-btn:active {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .tasks-summary {
   margin: 12px 16px 0;
   padding: 0;
@@ -2903,7 +3044,7 @@ body {
   transition: width 0.25s ease;
 }
 
-.tasks-metric-progress-fill--hours {
+.tasks-metric-progress-fill--tasks {
   background: linear-gradient(90deg, #fb923c, #f97316);
 }
 
@@ -3264,6 +3405,10 @@ body {
   border-radius: inherit;
   background: linear-gradient(90deg, #f87171, #ef4444);
   transition: width 0.25s ease;
+}
+
+.daily-progress-fill--tasks {
+  background: linear-gradient(90deg, #fb923c, #f97316);
 }
 
 .daily-detail-status {
@@ -4151,6 +4296,11 @@ body {
   padding: 10px 12px;
   background: #fff;
   border-bottom: 1px solid #eceef2;
+}
+
+.settings-header-spacer {
+  width: 40px;
+  flex-shrink: 0;
 }
 
 .settings-header h2 {

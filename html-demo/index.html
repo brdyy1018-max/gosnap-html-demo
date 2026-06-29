@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260625u" />
+    <link rel="stylesheet" href="styles.css?v=20260626g" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -211,54 +211,17 @@
                     <span></span>
                   </label>
                 </div>
+                <div class="device-connected-list hidden" id="device-connected-list" aria-live="polite"></div>
               </div>
               <div class="device-list-heading-row">
                 <h4 class="device-list-heading">Available Devices</h4>
                 <span class="device-list-hint">Select up to 2</span>
               </div>
               <div class="device-list-card" id="gopro-list">
-                <label class="device-list-item selected" id="device-pick-gopro-1">
-                  <input type="checkbox" name="gopro" value="GoPro-1" checked onchange="App.precheckToggleGopro('GoPro-1', this.checked)" />
-                  <span class="gopro-check" aria-hidden="true">✓</span>
-                  <span class="device-list-name">GoPro-1</span>
-                  <span class="device-list-status">Ready</span>
-                </label>
-                <div class="device-list-divider"></div>
-                <label class="device-list-item" id="device-pick-gopro-2">
-                  <input type="checkbox" name="gopro" value="GoPro-2" onchange="App.precheckToggleGopro('GoPro-2', this.checked)" />
-                  <span class="gopro-check" aria-hidden="true"></span>
-                  <span class="device-list-name">GoPro-2</span>
-                  <span class="device-list-status">Ready</span>
-                </label>
-                <div class="device-list-divider"></div>
-                <label class="device-list-item" id="device-pick-gopro-3">
-                  <input type="checkbox" name="gopro" value="GoPro-3" onchange="App.precheckToggleGopro('GoPro-3', this.checked)" />
-                  <span class="gopro-check" aria-hidden="true"></span>
-                  <span class="device-list-name">GoPro-3</span>
-                  <span class="device-list-status">Ready</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="precheck-page" id="precheck-step-sweeping">
-            <div class="precheck-page-inner">
-              <div class="sweeping-visual" aria-hidden="true">
-                <div class="sweeping-scene">
-                  <div class="sweeping-city">
-                    <span></span><span></span><span></span><span></span>
-                  </div>
-                  <div class="sweeping-pin">
-                    <span class="sweeping-pin-head"></span>
-                    <span class="sweeping-pin-stem"></span>
-                    <span class="sweeping-pin-shadow"></span>
-                  </div>
+                <div class="device-scan-state device-scan-state--idle">
+                  <span>Waiting for Bluetooth…</span>
                 </div>
               </div>
-              <h3 class="precheck-page-title">Automatic Street Sweeping</h3>
-              <p class="precheck-page-body">
-                After enabling automatic street sweep, tasks will begin automatically on accept.
-              </p>
             </div>
           </div>
 
@@ -292,12 +255,6 @@
       <!-- MAP -->
       <div class="screen" id="screen-map">
         <div class="map-wrap">
-          <div class="bg-recording-bar hidden" id="bg-recording-bar-map" aria-live="polite">
-            <span class="bg-recording-dot" aria-hidden="true"></span>
-            <span class="bg-recording-label">Background street scanning</span>
-            <span class="bg-recording-time" data-bg-rec-time>0:00</span>
-            <button type="button" class="bg-recording-stop" onclick="App.openTerminateRecordingModal()" aria-label="Stop background recording">Stop</button>
-          </div>
           <div class="map-top-chrome" id="map-top-chrome">
             <div class="map-top-left">
               <div class="device-status-bar" id="device-status-bar">
@@ -343,26 +300,27 @@
                 </div>
               </div>
             </div>
-            <button class="profile-fab" onclick="App.go('settings')" aria-label="Profile">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-              </svg>
-            </button>
           </div>
           <div id="map"></div>
           <div class="nav-banner hidden" id="nav-banner">
             <div class="nav-turn">↱</div>
             <div class="nav-dist">2.5 km</div>
           </div>
-          <div class="map-stats-widget" data-map-screen="map" aria-label="Task duration and total distance">
-            <div class="map-hud-time">
-              <span class="map-hud-time-value" data-stat="duration">0:00</span>
-              <span class="map-hud-time-label">Task Duration</span>
-            </div>
-            <div class="map-hud-distance">
+          <div class="map-stats-widget map-shift-panel" data-map-screen="map">
+            <button
+              type="button"
+              class="map-shift-btn"
+              id="map-shift-btn"
+              onclick="App.toggleShift()"
+              aria-pressed="false"
+              aria-label="Start shift"
+            >
+              <span class="map-shift-btn-text" data-shift-action>Start</span>
+            </button>
+            <div class="map-hud-distance" aria-live="polite">
+              <span class="map-hud-rec-dot hidden" data-shift-rec-dot aria-hidden="true"></span>
               <span class="map-hud-distance-value" data-stat="distance">0 km</span>
-              <span class="map-hud-distance-label">Total Distance</span>
+              <span class="map-hud-distance-label" data-stat="distance-label">Total Distance</span>
             </div>
           </div>
           <div class="map-alert hidden" id="map-alert">
@@ -410,8 +368,16 @@
       <div class="screen" id="screen-tasks">
         <div class="tasks-header">
           <button type="button" class="icon-btn" onclick="App.go('map')" aria-label="Back">←</button>
-          <h2>Task</h2>
-          <button type="button" class="icon-btn" onclick="App.refreshTaskList()" aria-label="Refresh">↻</button>
+          <h2>History</h2>
+          <div class="tasks-header-actions">
+            <button type="button" class="tasks-header-quiet-btn" onclick="App.openDailySummary()" aria-label="Daily summary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <rect x="4" y="5" width="16" height="16" rx="2" />
+                <path d="M8 3v4M16 3v4M4 11h16" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button type="button" class="icon-btn" onclick="App.refreshTaskList()" aria-label="Refresh">↻</button>
+          </div>
         </div>
         <div class="tasks-summary" id="tasks-summary"></div>
         <div class="tasks-filter-row">
@@ -432,7 +398,7 @@
       <!-- DAILY SUMMARY -->
       <div class="screen" id="screen-daily-summary">
         <div class="daily-page-header">
-          <span class="daily-page-header-spacer" aria-hidden="true"></span>
+          <button type="button" class="icon-btn" onclick="App.go('tasks')" aria-label="Back">←</button>
           <h2>Daily Summary</h2>
           <button type="button" class="icon-btn" onclick="App.renderDailySummary()" aria-label="Refresh">↻</button>
         </div>
@@ -456,21 +422,11 @@
           <h2>Settlement Map</h2>
         </div>
         <div class="map-wrap" style="flex: 1.2">
-          <div class="bg-recording-bar hidden" id="bg-recording-bar-progress" aria-live="polite">
-            <span class="bg-recording-dot" aria-hidden="true"></span>
-            <span class="bg-recording-label">Background street scanning</span>
-            <span class="bg-recording-time" data-bg-rec-time>0:00</span>
-            <button type="button" class="bg-recording-stop" onclick="App.openTerminateRecordingModal()" aria-label="Stop background recording">Stop</button>
-          </div>
           <div id="progress-map"></div>
-          <div class="map-stats-widget" data-map-screen="progress-map" aria-label="Task duration and total distance">
-            <div class="map-hud-time">
-              <span class="map-hud-time-value" data-stat="duration">0:00</span>
-              <span class="map-hud-time-label">Task Duration</span>
-            </div>
-            <div class="map-hud-distance">
+          <div class="map-stats-widget" data-map-screen="progress-map" aria-label="Total distance">
+            <div class="map-hud-distance map-hud-distance--solo">
               <span class="map-hud-distance-value" data-stat="distance">0 km</span>
-              <span class="map-hud-distance-label">Total Distance</span>
+              <span class="map-hud-distance-label" data-stat="distance-label">Total Distance</span>
             </div>
           </div>
           <button class="layer-fab" onclick="App.toggleProgressLayers()" title="Progress layers">
@@ -489,8 +445,8 @@
       <!-- SETTINGS -->
       <div class="screen" id="screen-settings">
         <div class="settings-header">
-          <button type="button" class="icon-btn" onclick="App.go('map')" aria-label="Back">←</button>
-          <h2>Setting</h2>
+          <span class="settings-header-spacer" aria-hidden="true"></span>
+          <h2>Profile</h2>
           <button type="button" class="icon-btn" onclick="App.refreshSettings()" aria-label="Refresh">↻</button>
         </div>
         <div class="scroll settings-scroll">
@@ -675,16 +631,15 @@
         <button
           type="button"
           class="bottom-nav-item"
-          data-tab="daily-summary"
-          onclick="App.tabNav('daily-summary')"
-          aria-label="Calendar"
+          data-tab="settings"
+          onclick="App.tabNav('settings')"
+          aria-label="Profile"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-            <rect x="4" y="5" width="16" height="16" rx="2" />
-            <path d="M8 3v4M16 3v4M4 11h16" stroke-linecap="round" />
-            <path d="M8 15h2M12 15h2M16 15h2M8 19h2" stroke-linecap="round" />
+            <circle cx="12" cy="8" r="4" />
+            <path d="M5 20c0-4 3.6-7 7-7s7 3 7 7" stroke-linecap="round" />
           </svg>
-          <span>Calendar</span>
+          <span>Profile</span>
         </button>
       </nav>
     </div>
@@ -853,23 +808,13 @@
       </div>
     </div>
 
-    <div class="overlay" id="modal-undo">
-      <div class="modal modal-confirm">
-        <h3>Do you want to Undo?</h3>
-        <div class="modal-confirm-actions">
-          <button type="button" class="btn btn-ghost" onclick="App.closeModal('modal-undo')">Cancel</button>
-          <button type="button" class="btn btn-primary" id="undo-confirm-btn">Confirm</button>
-        </div>
-      </div>
-    </div>
-
     <div class="overlay" id="modal-terminate-recording">
       <div class="modal modal-confirm">
-        <h3>Terminate background recording?</h3>
-        <p>Are you sure you want to terminate background street scanning recording? Ongoing capture will stop.</p>
+        <h3>End shift?</h3>
+        <p>Are you sure you want to end your shift and stop continuous street scanning recording?</p>
         <div class="modal-confirm-actions">
           <button type="button" class="btn btn-ghost" onclick="App.closeModal('modal-terminate-recording')">Cancel</button>
-          <button type="button" class="btn btn-primary" onclick="App.confirmTerminateBackgroundRecording()">Terminate</button>
+          <button type="button" class="btn btn-primary" onclick="App.confirmTerminateBackgroundRecording()">End Shift</button>
         </div>
       </div>
     </div>
@@ -915,7 +860,6 @@
     </div>
 
     <div class="layer-panel" id="progress-layer-panel"></div>
-    <div class="dropdown" id="card-dropdown"></div>
     <div class="toast" id="toast"></div>
 
     <script
@@ -923,7 +867,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260625u"></script>
+    <script src="app.js?v=20260626i"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
