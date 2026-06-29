@@ -501,9 +501,9 @@ function renderCaptureControls() {
 }
 
 const REVIEW_STATUS_LABELS = {
-  awaiting: 'Submitted - Awaiting Review',
-  rejected: 'Submitted - Review Failed',
-  approved: 'Submitted - Review Successful',
+  awaiting: 'Submitted',
+  rejected: 'Submitted',
+  approved: 'Submitted',
 };
 
 function mapPinTargetIcon() {
@@ -2509,19 +2509,16 @@ const App = {
     clearInterval(state.recInterval);
     state.mapMode = 'idle';
     state.recSeconds = 0;
+    state.recordingAlertType = null;
     state.recordingAlertDismissed = {};
     state.recordingPausedByAlert = false;
     state.recordingDeviceFault = null;
     state.captureRestMode = false;
+    renderRecordingAlertBanner();
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
     toast(state.shiftActive ? 'Task cancelled' : 'Capture cancelled');
-  },
-
-  dismissMapAlert() {
-    state.mapAlertDismissed = true;
-    document.getElementById('map-alert')?.classList.add('hidden');
   },
 
   showRecordingAlert(type) {
@@ -2637,7 +2634,8 @@ const App = {
       clearInterval(state.recInterval);
       state.mapMode = 'idle';
       state.recSeconds = 0;
-      state.mapAlertDismissed = false;
+      state.recordingAlertType = null;
+      state.recordingAlertDismissed = {};
       state.captureRestMode = false;
       App.renderMapTasks();
       App.renderTaskSheet();
@@ -2690,7 +2688,7 @@ const App = {
     state.preconditionGps = { authorized: true, distanceOk: true };
     syncGpsPrecondition();
     state.recSeconds = 0;
-    state.mapAlertDismissed = false;
+    state.recordingAlertDismissed = {};
     state.captureRestMode = false;
     state.mapMode = 'navigating';
     App.renderMapTasks({ skipFit: true });
