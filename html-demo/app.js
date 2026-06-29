@@ -148,7 +148,11 @@ function syncGpsPrecondition() {
 function getPreconditionSubtitle(row) {
   if (row.id === 'gps') {
     if (state.preconditions.gps) return row.ok;
-    if (state.preconditionGps.authorized && !state.preconditionGps.distanceOk) {
+    if (
+      state.preconditionGps.authorized &&
+      !state.preconditionGps.distanceOk &&
+      !state.shiftStartPending
+    ) {
       return row.distanceErr;
     }
     return row.err;
@@ -160,7 +164,12 @@ function getPreconditionAction(row) {
   if (state.preconditions[row.id]) {
     return '<span class="pre-card-check" aria-label="Ready"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
   }
-  if (row.id === 'gps' && state.preconditionGps.authorized && !state.preconditionGps.distanceOk) {
+  if (
+    row.id === 'gps' &&
+    state.preconditionGps.authorized &&
+    !state.preconditionGps.distanceOk &&
+    !state.shiftStartPending
+  ) {
     return '<button type="button" class="pre-card-action pre-card-action--refresh" onclick="App.refreshGpsDistance()">Refresh ↻</button>';
   }
   return `<button type="button" class="pre-card-action" onclick="App.fixPrecondition('${row.id}')">Set ›</button>`;
@@ -221,8 +230,6 @@ const state = {
   mapFilters: JSON.parse(JSON.stringify(DEFAULT_MAP_FILTERS)),
   filterDraft: null,
   progressLayers: Object.fromEntries(PROGRESS_LAYERS.map((l) => [l.id, true])),
-  taskFilter: 'all',
-  taskStatusFilter: 'all',
   taskDatePreset: 'all',
   taskDateLabel: 'Date',
   taskDateSelected: null,
@@ -235,8 +242,10 @@ const state = {
   backgroundRecSeconds: 0,
   backgroundRecInterval: null,
   shiftActive: false,
+  shiftPaused: false,
   shiftDistanceKm: 0,
   shiftDemoTimers: [],
+  shiftStartPending: false,
   activeRouteLayer: null,
   mapAlertDismissed: false,
   captureRestMode: false,
@@ -658,6 +667,18 @@ function syncPreconditionsFromDevice() {
   syncGpsPrecondition();
 }
 
+function syncPreconditionsForShift() {
+  state.preconditions.bluetooth = state.deviceChecks.bluetooth;
+  state.preconditions.network = state.deviceChecks.network;
+  state.preconditions.storage = state.deviceChecks.storage;
+  if (state.deviceChecks.gps) {
+    state.preconditionGps = { authorized: true, distanceOk: true };
+  } else {
+    state.preconditionGps = { authorized: false, distanceOk: false };
+  }
+  syncGpsPrecondition();
+}
+
 function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = String(sec % 60).padStart(2, '0');
@@ -686,6 +707,13 @@ function getMapStatsContext(screen) {
     return { distanceKm, compactTop: false, mode: 'off' };
   }
   const taskActive = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+  if (state.shiftPaused) {
+    return {
+      distanceKm: state.shiftDistanceKm || 0,
+      compactTop: taskActive,
+      mode: taskActive ? 'task' : 'paused',
+    };
+  }
   if (state.shiftActive) {
     return {
       distanceKm: state.shiftDistanceKm || 0,
@@ -697,24 +725,41 @@ function getMapStatsContext(screen) {
 }
 
 function updateMapStatsWidgets() {
+  const todayMetrics = computeTodayMetrics();
   document.querySelectorAll('.map-stats-widget').forEach((el) => {
     const ctx = getMapStatsContext(el.dataset.mapScreen);
     const distEl = el.querySelector('[data-stat="distance"]');
     const distLabel = el.querySelector('[data-stat="distance-label"]');
+    const tasksEl = el.querySelector('[data-stat="tasks"]');
     if (distEl) distEl.textContent = formatDistanceKm(ctx.distanceKm);
+    if (tasksEl) tasksEl.textContent = `${todayMetrics.tasks}/${todayMetrics.targets.tasks}`;
     el.classList.toggle('is-compact-top', ctx.compactTop);
     if (el.classList.contains('map-shift-panel')) {
-      el.classList.toggle('is-on-shift', state.shiftActive);
+      el.classList.toggle('is-on-shift', state.shiftActive && !state.shiftPaused);
+      el.classList.toggle('is-paused', state.shiftPaused);
       el.classList.toggle('is-recording', state.backgroundRecording);
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
       const btn = el.querySelector('.map-shift-btn');
       const actionEl = el.querySelector('[data-shift-action]');
       const recDot = el.querySelector('[data-shift-rec-dot]');
       if (btn) {
-        btn.setAttribute('aria-pressed', state.shiftActive ? 'true' : 'false');
-        btn.setAttribute('aria-label', state.shiftActive ? 'Stop shift' : 'Start shift');
+        btn.setAttribute(
+          'aria-pressed',
+          state.shiftActive || state.shiftPaused ? 'true' : 'false'
+        );
+        if (state.shiftPaused) {
+          btn.setAttribute('aria-label', 'Resume shift');
+        } else if (state.shiftActive) {
+          btn.setAttribute('aria-label', 'Stop shift');
+        } else {
+          btn.setAttribute('aria-label', 'Start shift');
+        }
       }
-      if (actionEl) actionEl.textContent = state.shiftActive ? 'Stop' : 'Start';
+      if (actionEl) {
+        if (state.shiftPaused) actionEl.textContent = 'Resume';
+        else if (state.shiftActive) actionEl.textContent = 'Stop';
+        else actionEl.textContent = 'Start';
+      }
       if (recDot) recDot.classList.toggle('hidden', !state.backgroundRecording);
       if (distLabel) distLabel.textContent = 'Total Distance';
     }
@@ -765,10 +810,29 @@ function startShift() {
 
 function stopShift() {
   state.shiftActive = false;
+  state.shiftPaused = false;
   state.shiftDistanceKm = 0;
   state.backgroundRecSeconds = 0;
   clearShiftDemo();
   stopBackgroundRecording();
+}
+
+function pauseShift() {
+  if (!state.shiftActive || state.shiftPaused) return;
+  state.shiftActive = false;
+  state.shiftPaused = true;
+  clearShiftDemo();
+  stopBackgroundRecording();
+  updateMapStatsWidgets();
+}
+
+function resumeShift() {
+  if (!state.shiftPaused || state.shiftActive) return;
+  state.shiftPaused = false;
+  state.shiftActive = true;
+  startBackgroundRecording();
+  toastSuccess('Shift resumed');
+  updateMapStatsWidgets();
 }
 
 const SHIFT_DEMO_TASK_ID = 'task_vermont_001';
@@ -896,7 +960,7 @@ function getDailySummaryMonthData(year, month) {
     }
 
     if (day === 20 && year === 2025 && month === 5) {
-      data[day] = { status: 'progress', km: 18.4, tasks: 7 };
+      data[day] = { status: 'fail', km: 18.4, tasks: 7 };
     } else if (day % 9 === 0 || day === 13) {
       data[day] = { status: 'fail', km: 11.6 + (day % 3), tasks: 4 + (day % 3) };
     } else if (day % 7 === 0) {
@@ -957,10 +1021,10 @@ function renderDailySummaryStatusIcon(status) {
       <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>
     </span>`;
   }
-  if (status === 'progress') {
-    return `<span class="daily-cell-icon daily-cell-icon--progress" aria-hidden="true"><span class="daily-cell-progress-dot"></span></span>`;
+  if (status === 'pending') {
+    return '<span class="daily-cell-icon daily-cell-icon--pending" aria-hidden="true"></span>';
   }
-  return '<span class="daily-cell-icon daily-cell-icon--pending" aria-hidden="true"></span>';
+  return '<span class="daily-cell-icon-spacer" aria-hidden="true"></span>';
 }
 
 function renderDailySummaryStatusBadge(status, label) {
@@ -985,7 +1049,7 @@ function formatDailySummaryStatus(status) {
   if (status === 'pass') return 'Completed';
   if (status === 'fail') return 'Failed';
   if (status === 'progress') return 'In Progress';
-  if (status === 'pending') return 'Pending';
+  if (status === 'pending') return 'Day Off';
   return 'No Data';
 }
 
@@ -1084,13 +1148,6 @@ function renderTaskDateCalendar() {
 
 function filterRecordsForTasksPage() {
   let rows = state.records.filter((r) => ['approved', 'pending', 'reviewing', 'rejected'].includes(r.status));
-  if (state.taskStatusFilter !== 'all') {
-    if (state.taskStatusFilter === 'pending') {
-      rows = rows.filter((r) => ['pending', 'reviewing'].includes(r.status));
-    } else {
-      rows = rows.filter((r) => r.status === state.taskStatusFilter);
-    }
-  }
   if (state.taskDateSelected) {
     const selected = new Date(`${state.taskDateSelected}T00:00:00`);
     const next = new Date(selected);
@@ -1368,7 +1425,7 @@ const App = {
 
   onAutoPositionToggle(on) {
     state.settings.autoPosition = on;
-    toast(on ? 'Auto-Position enabled' : 'Auto-Position disabled');
+    toast(on ? 'Auto Position enabled' : 'Auto Position disabled');
   },
 
   onAutoUpdatesToggle(on) {
@@ -1764,7 +1821,36 @@ const App = {
   openCheckModal(id) {
     if (state.deviceChecks[id]) return;
     const check = DEVICE_CHECKS.find((c) => c.id === id);
-    if (check) document.getElementById(check.modal).classList.add('show');
+    if (check) {
+      if (id === 'bluetooth') App.prepareBluetoothModal();
+      document.getElementById(check.modal).classList.add('show');
+    }
+  },
+
+  prepareBluetoothModal() {
+    const toggle = document.getElementById('bluetooth-modal-toggle');
+    const doneBtn = document.getElementById('btn-bluetooth-done');
+    const on = !!state.deviceChecks.bluetooth;
+    if (toggle) toggle.checked = on;
+    if (doneBtn) doneBtn.disabled = !on;
+  },
+
+  onBluetoothModalToggle(on) {
+    const doneBtn = document.getElementById('btn-bluetooth-done');
+    if (doneBtn) doneBtn.disabled = !on;
+  },
+
+  cancelBluetoothModal() {
+    App.closeModal('modal-bluetooth');
+    if (state.preconditionFixReturn) {
+      document.getElementById('modal-precondition').classList.add('show');
+    }
+  },
+
+  confirmBluetoothModal() {
+    const toggle = document.getElementById('bluetooth-modal-toggle');
+    if (!toggle?.checked) return;
+    App.fixCheck('bluetooth');
   },
 
   fixCheck(id) {
@@ -1790,33 +1876,45 @@ const App = {
 
   confirmGpsAuth(mode) {
     App.closeModal('modal-gps-auth');
+    const fromShiftStart = state.shiftStartPending;
+
     if (mode === 'deny') {
       state.preconditionGps = { authorized: false, distanceOk: false };
       state.deviceChecks.gps = false;
     } else {
       state.preconditionGps.authorized = true;
       state.deviceChecks.gps = true;
-      state.preconditionGps.distanceOk = state.settings.simulateFailedChecks
-        ? false
-        : checkTaskDistanceOk();
+      state.preconditionGps.distanceOk = fromShiftStart
+        ? true
+        : state.settings.simulateFailedChecks
+          ? false
+          : checkTaskDistanceOk();
     }
     syncGpsPrecondition();
     if (state.screen === 'precheck' && state.precheckStep === 'device') {
       state.precheckSetupPhase = 'bluetooth';
       setTimeout(() => {
+        App.prepareBluetoothModal();
         document.getElementById('modal-bluetooth')?.classList.add('show');
       }, 320);
       return;
     }
     App.renderPrecondition();
     App.updateMapChrome();
-    if (state.preconditionFixReturn) {
+    if (state.preconditionFixReturn || fromShiftStart) {
       document.getElementById('modal-precondition').classList.add('show');
     }
   },
 
   refreshGpsDistance() {
     if (!state.preconditionGps.authorized) return;
+    if (state.shiftStartPending) {
+      state.preconditionGps.distanceOk = true;
+      syncGpsPrecondition();
+      App.renderPrecondition();
+      toast('Location authorized');
+      return;
+    }
     toast('Checking location…');
     setTimeout(() => {
       if (state.settings.simulateFailedChecks) {
@@ -1873,7 +1971,10 @@ const App = {
 
   closeModal(id) {
     document.getElementById(id).classList.remove('show');
-    if (id === 'modal-precondition') state.preconditionFixReturn = false;
+    if (id === 'modal-precondition') {
+      state.preconditionFixReturn = false;
+      state.shiftStartPending = false;
+    }
   },
 
   toggleStatusBar() {
@@ -2181,6 +2282,8 @@ const App = {
   openPrecondition() {
     if (state.settings.simulateFailedChecks) {
       applyFailedChecks();
+    } else if (state.shiftStartPending) {
+      syncPreconditionsForShift();
     } else {
       syncPreconditionsFromDevice();
     }
@@ -2218,13 +2321,19 @@ const App = {
     if (!modalId) return;
     state.preconditionFixReturn = true;
     document.getElementById('modal-precondition').classList.remove('show');
+    if (id === 'bluetooth') App.prepareBluetoothModal();
     document.getElementById(modalId).classList.add('show');
   },
 
   preconditionGo() {
     if (!allPreconditionsOk()) return;
+    const startingShift = state.shiftStartPending;
     state.preconditionFixReturn = false;
     App.closeModal('modal-precondition');
+    if (startingShift) {
+      startShift();
+      return;
+    }
     state.recSeconds = 0;
     state.mapAlertDismissed = false;
     state.captureRestMode = false;
@@ -2255,6 +2364,7 @@ const App = {
     if (!t || state.mapMode !== 'completing') return;
     t.display_state = 'completed_local';
     t.review_status = 'awaiting';
+    state.todayLoggedTasks = Number(state.todayLoggedTasks || 0) + 1;
     state.mapMode = 'review';
     clearInterval(state.recInterval);
     state.recSeconds = 0;
@@ -2288,7 +2398,53 @@ const App = {
   },
 
   openTerminateRecordingModal() {
-    document.getElementById('modal-terminate-recording').classList.add('show');
+    const modal = document.getElementById('modal-terminate-recording');
+    const title = modal?.querySelector('h3');
+    const desc = modal?.querySelector('p');
+    const primaryBtn = document.getElementById('btn-shift-break-primary');
+    if (state.shiftPaused) {
+      if (title) title.textContent = 'Resume or end shift?';
+      if (desc) {
+        desc.textContent =
+          'Resume to continue street scanning with your saved progress, or end shift to finish your work day.';
+      }
+      if (primaryBtn) {
+        primaryBtn.textContent = 'Resume Shift';
+        primaryBtn.onclick = () => App.confirmResumeShift();
+      }
+    } else {
+      if (title) title.textContent = 'Pause or end shift?';
+      if (desc) {
+        desc.textContent =
+          'Pause keeps your distance and progress for a short break. End shift finishes your work day and stops street scanning.';
+      }
+      if (primaryBtn) {
+        primaryBtn.textContent = 'Pause Shift';
+        primaryBtn.onclick = () => App.confirmPauseShift();
+      }
+    }
+    modal?.classList.add('show');
+  },
+
+  confirmResumeShift() {
+    App.closeModal('modal-terminate-recording');
+    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
+      toast('Finish or cancel the current task first');
+      return;
+    }
+    resumeShift();
+    App.updateMapChrome();
+  },
+
+  confirmPauseShift() {
+    App.closeModal('modal-terminate-recording');
+    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
+      toast('Finish or cancel the current task first');
+      return;
+    }
+    pauseShift();
+    App.updateMapChrome();
+    toast('Shift paused — tap Resume when ready');
   },
 
   confirmTerminateBackgroundRecording() {
@@ -2308,6 +2464,14 @@ const App = {
   },
 
   toggleShift() {
+    if (state.shiftPaused) {
+      if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
+        toast('Finish or cancel the current task first');
+        return;
+      }
+      App.openTerminateRecordingModal();
+      return;
+    }
     if (state.shiftActive) {
       if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
         toast('Finish or cancel the current task first');
@@ -2317,7 +2481,8 @@ const App = {
       return;
     }
     if (state.screen !== 'map') App.go('map');
-    startShift();
+    state.shiftStartPending = true;
+    App.openPrecondition();
   },
 
   runShiftDemoTaskFlow(taskId) {
@@ -2536,10 +2701,6 @@ const App = {
       </div>`;
 
     document.getElementById('task-date-filter-label').textContent = state.taskDateLabel;
-    document.getElementById('task-status-filter-label').textContent =
-      state.taskStatusFilter === 'all'
-        ? 'Status'
-        : state.taskStatusFilter.charAt(0).toUpperCase() + state.taskStatusFilter.slice(1);
 
     const filtered = filterRecordsForTasksPage();
     const groups = groupRecordsByDay(filtered);
@@ -2562,16 +2723,12 @@ const App = {
   },
 
   renderTaskCardHtml(r) {
-    const statusClass = getRecordStatusClass(r.status);
-    const label = getRecordStatusLabel(r.status);
     const title = r.title || r.mapping_title || r.task_id;
     const copyIcon =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
 
     return `<article class="task-submit-card" onclick="App.openTaskDetail('${r.task_id}')">
-      <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}">
-        <span class="task-submit-status task-submit-status--${statusClass}">${label}</span>
-      </div>
+      <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}"></div>
       <div class="task-submit-body">
         <h4 class="task-submit-title">${title}</h4>
         <p class="task-submit-time">${formatRecordDate(r.shot_at)}</p>
@@ -2622,13 +2779,11 @@ const App = {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const monthData = getDailySummaryMonthData(year, month);
-    const stats = computeDailySummaryMonthStats(year, month);
     const selected = state.dailySummarySelectedDay;
     const selectedInfo = getDailySummaryDayInfo(year, month, selected);
     const targets = state.dailySummaryTargets;
     const kmPct = Math.min(100, Math.round((selectedInfo.km / targets.km) * 100));
     const tasksPct = Math.min(100, Math.round((selectedInfo.tasks / targets.tasks) * 100));
-    const statusLabel = formatDailySummaryStatus(selectedInfo.status);
     const detailTitle = formatDailySummaryDetailTitle(year, month, selected);
 
     let cells = '';
@@ -2638,7 +2793,7 @@ const App = {
     for (let day = 1; day <= daysInMonth; day += 1) {
       const info = monthData[day] || { status: 'empty', km: 0, tasks: 0 };
       const isSelected = day === selected;
-      const hasMetrics = ['pass', 'fail', 'progress'].includes(info.status);
+      const hasMetrics = ['pass', 'fail'].includes(info.status);
       const kmLine = hasMetrics ? `${info.km.toFixed(1)}km` : '';
       const tasksLine = hasMetrics ? `${info.tasks}/${targets.tasks}` : '';
       cells += `<button type="button" class="daily-cell daily-cell--${info.status}${isSelected ? ' is-selected' : ''}" onclick="App.selectDailySummaryDay(${day})" aria-label="Day ${day}, ${formatDailySummaryStatus(info.status)}" aria-pressed="${isSelected}">
@@ -2652,21 +2807,6 @@ const App = {
     }
 
     el.innerHTML = `
-      <div class="daily-month-stats">
-        <div class="daily-stat-card">
-          <span class="daily-stat-value">${stats.completed}</span>
-          <span class="daily-stat-label">Completed</span>
-        </div>
-        <div class="daily-stat-card">
-          <span class="daily-stat-value daily-stat-value--danger">${stats.failed}</span>
-          <span class="daily-stat-label">Missed</span>
-        </div>
-        <div class="daily-stat-card">
-          <span class="daily-stat-value">${stats.passRate}%</span>
-          <span class="daily-stat-label">Pass Rate</span>
-        </div>
-      </div>
-
       <section class="daily-calendar-card" aria-label="Attendance calendar">
         <div class="daily-summary-month">
           <button type="button" class="daily-month-nav" onclick="App.shiftDailySummaryMonth(-1)" aria-label="Previous month">
@@ -2681,7 +2821,7 @@ const App = {
         <div class="daily-legend" aria-hidden="true">
           <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pass"></i>Completed</span>
           <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--fail"></i>Missed</span>
-          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pending"></i>Pending</span>
+          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pending"></i>Day Off</span>
         </div>
 
         <div class="daily-weekdays">
@@ -2709,10 +2849,6 @@ const App = {
           <div class="daily-progress" role="progressbar" aria-valuenow="${tasksPct}" aria-valuemin="0" aria-valuemax="100">
             <span class="daily-progress-fill daily-progress-fill--tasks" style="width:${tasksPct}%"></span>
           </div>
-        </div>
-        <div class="daily-detail-status">
-          <span class="daily-detail-status-label">Status</span>
-          ${renderDailySummaryStatusBadge(selectedInfo.status, statusLabel)}
         </div>
       </section>`;
   },
@@ -2775,28 +2911,6 @@ const App = {
     toast('Copied ID');
   },
 
-  openTaskStatusFilter() {
-    const options = [
-      { id: 'all', label: 'ALL' },
-      { id: 'pending', label: 'Pending' },
-      { id: 'approved', label: 'Approved' },
-      { id: 'rejected', label: 'Rejected' },
-    ];
-    document.getElementById('task-status-options').innerHTML = options
-      .map(
-        (opt) =>
-          `<button type="button" class="task-status-option ${state.taskStatusFilter === opt.id ? 'is-active' : ''}" onclick="App.setTaskStatusFilter('${opt.id}')">${opt.label}</button>`
-      )
-      .join('');
-    document.getElementById('modal-task-status').classList.add('show');
-  },
-
-  setTaskStatusFilter(id) {
-    state.taskStatusFilter = id;
-    App.closeModal('modal-task-status');
-    App.renderTaskList();
-  },
-
   openTaskDateFilter() {
     renderTaskDateCalendar();
     App.syncTaskDatePresets();
@@ -2836,12 +2950,6 @@ const App = {
     renderTaskDateCalendar();
     App.renderTaskList();
     App.closeModal('modal-task-date');
-  },
-
-  setTaskFilter(id) {
-    state.taskFilter = id;
-    state.taskStatusFilter = id === 'all' ? 'all' : id;
-    App.renderTaskList();
   },
 
   onTaskCardClick(taskId) {
