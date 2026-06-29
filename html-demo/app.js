@@ -221,19 +221,22 @@ const TASK_SHEET_RELEASE_ICON =
 const RECORDING_ALERTS = {
   device_disconnect: {
     title: 'GoPro Disconnected',
-    body: 'The camera lost its Bluetooth connection during recording. Recording is paused — reconnect your GoPro to continue.',
-    primary: 'Reconnect Device',
+    banner: 'GoPro disconnected — recording paused',
+    body: 'The camera lost its Bluetooth connection during recording.',
+    primary: 'Reconnect',
     icon: '📷',
   },
   storage_full: {
     title: 'Run Out Of Memory',
-    body: 'Your GoPro storage is full. Recording is paused — free up space before you can continue.',
-    primary: 'Open Storage Settings',
+    banner: 'Run out of memory — recording paused',
+    body: 'Your GoPro storage is full.',
+    primary: 'Storage',
     icon: '💾',
   },
   wifi_lost: {
     title: 'WiFi Connection Lost',
-    body: 'The camera WiFi dropped during recording. Recording is paused — reconnect to resume syncing.',
+    banner: 'WiFi connection lost — recording paused',
+    body: 'The camera WiFi dropped during recording.',
     primary: 'Reconnect WiFi',
     icon: '📡',
   },
@@ -276,7 +279,6 @@ const state = {
   shiftDemoTimers: [],
   shiftStartPending: false,
   activeRouteLayer: null,
-  mapAlertDismissed: false,
   recordingAlertType: null,
   recordingAlertDismissed: {},
   recordingPausedByAlert: false,
@@ -875,6 +877,26 @@ function syncMapTaskSheet() {
   App.updateMapChrome();
 }
 
+function renderRecordingAlertBanner() {
+  const banner = document.getElementById('recording-alert');
+  if (!banner) return;
+
+  if (!state.recordingAlertType) {
+    banner.classList.add('hidden');
+    return;
+  }
+
+  const config = RECORDING_ALERTS[state.recordingAlertType];
+  if (!config) {
+    banner.classList.add('hidden');
+    return;
+  }
+
+  document.getElementById('recording-alert-text').textContent = config.banner || config.title;
+  document.getElementById('recording-alert-action').textContent = config.primary;
+  banner.classList.remove('hidden');
+}
+
 function pauseRecordingForAlert() {
   if (state.recInterval) {
     clearInterval(state.recInterval);
@@ -894,7 +916,6 @@ function bootDemoRecording(alertType) {
   state.onboardingComplete = true;
   state.shiftActive = true;
   state.shiftPaused = false;
-  state.mapAlertDismissed = false;
   state.recordingAlertDismissed = {};
   state.recordingDeviceFault = null;
 
@@ -2084,7 +2105,6 @@ const App = {
     const nav = document.getElementById('nav-banner');
     const captureSheet = document.getElementById('capture-sheet');
     const mapFloats = document.getElementById('map-float-actions');
-    const mapAlert = document.getElementById('map-alert');
     const sheet = document.getElementById('task-sheet');
     const mapRail = document.getElementById('map-rail');
 
@@ -2118,7 +2138,8 @@ const App = {
       !state.recordingAlertDismissed.storage_full &&
       !state.recordingAlertType;
     if (showMemoryAlert) App.showRecordingAlert('storage_full');
-    mapAlert.classList.add('hidden');
+
+    renderRecordingAlertBanner();
 
     const showRest = state.mapMode === 'recording' && state.recSeconds >= 995;
     document.getElementById('map-float-rest').classList.toggle('hidden', !showRest);
@@ -2444,7 +2465,7 @@ const App = {
       return;
     }
     state.recSeconds = 0;
-    state.mapAlertDismissed = false;
+    state.recordingAlertDismissed = {};
     state.captureRestMode = false;
     App.renderMapTasks({ skipFit: true });
     App.renderTaskSheet();
@@ -2488,8 +2509,6 @@ const App = {
     clearInterval(state.recInterval);
     state.mapMode = 'idle';
     state.recSeconds = 0;
-    state.mapAlertDismissed = false;
-    state.recordingAlertType = null;
     state.recordingAlertDismissed = {};
     state.recordingPausedByAlert = false;
     state.recordingDeviceFault = null;
@@ -2516,11 +2535,7 @@ const App = {
 
     if (state.mapMode === 'recording') pauseRecordingForAlert();
 
-    document.getElementById('recording-alert-icon').textContent = config.icon;
-    document.getElementById('recording-alert-title').textContent = config.title;
-    document.getElementById('recording-alert-body').textContent = config.body;
-    document.getElementById('recording-alert-primary').textContent = config.primary;
-    document.getElementById('modal-recording-alert').classList.add('show');
+    renderRecordingAlertBanner();
     App.updateMapChrome();
   },
 
@@ -2538,7 +2553,7 @@ const App = {
     }
     state.recordingAlertType = null;
     state.recordingDeviceFault = null;
-    App.closeModal('modal-recording-alert');
+    renderRecordingAlertBanner();
     resumeRecordingAfterAlert();
     App.updateMapChrome();
   },

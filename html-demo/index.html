@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260629u" />
+    <link rel="stylesheet" href="styles.css?v=20260629v" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -315,9 +315,13 @@
               </div>
             </div>
           </div>
-          <div class="map-alert hidden" id="map-alert">
-            <span class="map-alert-text">Run Out Of Memory</span>
-            <button type="button" class="map-alert-close" onclick="App.dismissMapAlert()" aria-label="Dismiss">×</button>
+          <div class="recording-alert hidden" id="recording-alert" role="status" aria-live="polite">
+            <div class="recording-alert-content">
+              <span class="recording-alert-icon" aria-hidden="true">⚠</span>
+              <span class="recording-alert-text" id="recording-alert-text"></span>
+              <button type="button" class="recording-alert-action" id="recording-alert-action" onclick="App.handleRecordingAlertPrimary()"></button>
+            </div>
+            <button type="button" class="recording-alert-close" onclick="App.dismissRecordingAlert()" aria-label="Dismiss">×</button>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
             <button type="button" class="map-float-btn" onclick="App.exitCapture()">Close</button>
@@ -532,7 +536,7 @@
           </div>
 
           <h3 class="settings-section-title">Recording Alerts (Demo)</h3>
-          <p class="settings-demo-hint">Preview interruption dialogs during recording. If you are not recording, the demo jumps into a sample capture first.</p>
+          <p class="settings-demo-hint">Preview compact recording alerts on the map. If you are not recording, the demo jumps into a sample capture first.</p>
           <div class="settings-group">
             <div class="settings-row" onclick="App.previewRecordingAlert('device_disconnect')">
               <span class="settings-row-left">Preview: GoPro Disconnected</span>
@@ -808,18 +812,6 @@
         <div class="modal-logout-actions">
           <button type="button" class="modal-logout-btn" onclick="App.closeModal('modal-logout')">Cancel</button>
           <button type="button" class="modal-logout-btn modal-logout-btn--confirm" onclick="App.logout()">Confirm</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="overlay overlay-center" id="modal-recording-alert">
-      <div class="modal modal-recording-alert">
-        <div class="modal-recording-alert-icon" id="recording-alert-icon" aria-hidden="true">⚠</div>
-        <h3 id="recording-alert-title">GoPro Disconnected</h3>
-        <p id="recording-alert-body">The camera lost its Bluetooth connection during recording.</p>
-        <div class="modal-confirm-actions modal-confirm-actions--stack">
-          <button type="button" class="btn btn-primary" id="recording-alert-primary" onclick="App.handleRecordingAlertPrimary()">Reconnect Device</button>
-          <button type="button" class="btn btn-ghost" onclick="App.dismissRecordingAlert()">Dismiss</button>
         </div>
       </div>
     </div>
