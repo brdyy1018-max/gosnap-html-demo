@@ -2126,7 +2126,7 @@ body {
 }
 
 .map-shift-panel {
-  gap: 0;
+  gap: 8px;
 }
 
 .map-shift-btn {
@@ -2195,7 +2195,7 @@ body {
 .map-hud-distance {
   position: relative;
   margin-left: -18px;
-  padding: 10px 12px 10px 26px;
+  padding: 10px 14px 10px 26px;
   min-width: 196px;
   min-height: 56px;
   background: #fff;
@@ -2210,34 +2210,35 @@ body {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.map-shift-panel.is-on-shift .map-hud-distance,
-.map-shift-panel.is-paused .map-hud-distance {
-  min-width: 248px;
-  padding-right: 10px;
+.map-shift-end {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.map-shift-end {
-  margin-left: 8px;
-  padding: 6px 12px;
-  border: 1px solid rgba(220, 38, 38, 0.35);
-  border-radius: 999px;
-  background: #fff;
-  color: #dc2626;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  pointer-events: auto;
+.map-shift-end svg {
+  display: block;
 }
 
 .map-shift-end:active {
-  opacity: 0.82;
+  transform: scale(0.94);
+  color: #ef4444;
+  background: #fef2f2;
 }
 
 .map-shift-panel.is-paused .map-hud-distance {
-  opacity: 0.92;
+  opacity: 0.94;
 }
 
 .map-hud-stat {
