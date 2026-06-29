@@ -877,24 +877,18 @@ function syncMapTaskSheet() {
   App.updateMapChrome();
 }
 
-function renderRecordingAlertBanner() {
-  const banner = document.getElementById('recording-alert');
-  if (!banner) return;
+function fillRecordingAlertModal(type) {
+  const config = RECORDING_ALERTS[type];
+  if (!config) return;
 
-  if (!state.recordingAlertType) {
-    banner.classList.add('hidden');
-    return;
+  const iconEl = document.getElementById('recording-alert-icon');
+  if (iconEl) {
+    iconEl.textContent = config.icon;
+    iconEl.classList.toggle('red', type === 'storage_full');
   }
-
-  const config = RECORDING_ALERTS[state.recordingAlertType];
-  if (!config) {
-    banner.classList.add('hidden');
-    return;
-  }
-
-  document.getElementById('recording-alert-text').textContent = config.banner || config.title;
-  document.getElementById('recording-alert-action').textContent = config.primary;
-  banner.classList.remove('hidden');
+  document.getElementById('recording-alert-title').textContent = config.title;
+  document.getElementById('recording-alert-body').textContent = config.body;
+  document.getElementById('recording-alert-primary').textContent = config.primary;
 }
 
 function pauseRecordingForAlert() {
@@ -2139,7 +2133,8 @@ const App = {
       !state.recordingAlertType;
     if (showMemoryAlert) App.showRecordingAlert('storage_full');
 
-    renderRecordingAlertBanner();
+    const alertModal = document.getElementById('modal-recording-alert');
+    if (alertModal && !state.recordingAlertType) alertModal.classList.remove('show');
 
     const showRest = state.mapMode === 'recording' && state.recSeconds >= 995;
     document.getElementById('map-float-rest').classList.toggle('hidden', !showRest);
@@ -2514,7 +2509,7 @@ const App = {
     state.recordingPausedByAlert = false;
     state.recordingDeviceFault = null;
     state.captureRestMode = false;
-    renderRecordingAlertBanner();
+    App.closeModal('modal-recording-alert');
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2532,7 +2527,8 @@ const App = {
 
     if (state.mapMode === 'recording') pauseRecordingForAlert();
 
-    renderRecordingAlertBanner();
+    fillRecordingAlertModal(type);
+    document.getElementById('modal-recording-alert').classList.add('show');
     App.updateMapChrome();
   },
 
@@ -2550,7 +2546,7 @@ const App = {
     }
     state.recordingAlertType = null;
     state.recordingDeviceFault = null;
-    renderRecordingAlertBanner();
+    App.closeModal('modal-recording-alert');
     resumeRecordingAfterAlert();
     App.updateMapChrome();
   },
