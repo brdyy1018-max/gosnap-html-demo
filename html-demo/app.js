@@ -1256,10 +1256,6 @@ const App = {
         if (!state.map) App.initMap();
         else state.map.invalidateSize();
         App.renderMapTasks();
-        if (!state.selectedTaskId) {
-          const featured = state.mapTasks.find((t) => t.task_id === 'task_hollywood_009');
-          if (featured) App.selectTask('task_hollywood_009');
-        }
         App.renderTaskSheet();
         App.updateMapChrome();
         updateBackgroundRecordingBar();
@@ -2241,7 +2237,6 @@ const App = {
     }
 
     sheet.innerHTML = `
-      <div class="sheet-handle" aria-hidden="true"></div>
       <div class="task-sheet-body">
         <h2 class="task-sheet-title">${title}</h2>
         <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
