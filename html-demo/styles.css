@@ -2166,12 +2166,12 @@ body {
 }
 
 .map-shift-panel.is-on-shift .map-shift-btn {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14);
 }
 
 .map-shift-panel.is-on-shift .map-shift-btn-text {
-  color: #ef4444;
+  color: #d97706;
 }
 
 .map-shift-panel.is-paused .map-shift-btn {
@@ -2195,7 +2195,7 @@ body {
 .map-hud-distance {
   position: relative;
   margin-left: -18px;
-  padding: 10px 14px 10px 26px;
+  padding: 10px 12px 10px 26px;
   min-width: 196px;
   min-height: 56px;
   background: #fff;
@@ -2208,6 +2208,36 @@ body {
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
   border: 1px solid transparent;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-shift-panel.is-on-shift .map-hud-distance,
+.map-shift-panel.is-paused .map-hud-distance {
+  min-width: 248px;
+  padding-right: 10px;
+}
+
+.map-shift-end {
+  margin-left: 8px;
+  padding: 6px 12px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 999px;
+  background: #fff;
+  color: #dc2626;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.map-shift-end:active {
+  opacity: 0.82;
+}
+
+.map-shift-panel.is-paused .map-hud-distance {
+  opacity: 0.92;
 }
 
 .map-hud-stat {

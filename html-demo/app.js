@@ -776,7 +776,10 @@ function updateMapStatsWidgets() {
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
       const btn = el.querySelector('.map-shift-btn');
       const actionEl = el.querySelector('[data-shift-action]');
+      const endBtn = el.querySelector('.map-shift-end');
       const recDot = el.querySelector('[data-shift-rec-dot]');
+      const showEnd = state.shiftActive || state.shiftPaused;
+      if (endBtn) endBtn.classList.toggle('hidden', !showEnd);
       if (btn) {
         btn.setAttribute(
           'aria-pressed',
@@ -785,14 +788,14 @@ function updateMapStatsWidgets() {
         if (state.shiftPaused) {
           btn.setAttribute('aria-label', 'Resume shift');
         } else if (state.shiftActive) {
-          btn.setAttribute('aria-label', 'Stop shift');
+          btn.setAttribute('aria-label', 'Pause shift');
         } else {
           btn.setAttribute('aria-label', 'Start shift');
         }
       }
       if (actionEl) {
         if (state.shiftPaused) actionEl.textContent = 'Resume';
-        else if (state.shiftActive) actionEl.textContent = 'Stop';
+        else if (state.shiftActive) actionEl.textContent = 'Pause';
         else actionEl.textContent = 'Start';
       }
       if (recDot) recDot.classList.toggle('hidden', !state.backgroundRecording);
@@ -2574,70 +2577,22 @@ const App = {
     toast(state.captureRestMode ? 'Over — paused segment' : 'Over — resumed');
   },
 
-  openTerminateRecordingModal() {
-    const modal = document.getElementById('modal-terminate-recording');
-    const title = modal?.querySelector('h3');
-    const desc = modal?.querySelector('p');
-    const primaryBtn = document.getElementById('btn-shift-break-primary');
-    if (state.shiftPaused) {
-      if (title) title.textContent = 'Resume or end shift?';
-      if (desc) {
-        desc.textContent =
-          'Resume to continue street scanning with your saved progress, or end shift to finish your work day.';
-      }
-      if (primaryBtn) {
-        primaryBtn.textContent = 'Resume Shift';
-        primaryBtn.onclick = () => App.confirmResumeShift();
-      }
-    } else {
-      if (title) title.textContent = 'Pause or end shift?';
-      if (desc) {
-        desc.textContent =
-          'Pause keeps your distance and progress for a short break. End shift finishes your work day and stops street scanning.';
-      }
-      if (primaryBtn) {
-        primaryBtn.textContent = 'Pause Shift';
-        primaryBtn.onclick = () => App.confirmPauseShift();
-      }
-    }
-    modal?.classList.add('show');
-  },
-
-  confirmResumeShift() {
-    App.closeModal('modal-terminate-recording');
-    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
-      toast('Finish or cancel the current task first');
-      return;
-    }
-    resumeShift();
-    App.updateMapChrome();
-  },
-
-  confirmPauseShift() {
-    App.closeModal('modal-terminate-recording');
-    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
-      toast('Finish or cancel the current task first');
-      return;
-    }
-    pauseShift();
-    App.updateMapChrome();
-    toast('Shift paused — tap Resume when ready');
-  },
-
-  confirmTerminateBackgroundRecording() {
-    App.closeModal('modal-terminate-recording');
+  endShift() {
     if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
       clearInterval(state.recInterval);
       state.mapMode = 'idle';
       state.recSeconds = 0;
       state.recordingAlertType = null;
       state.recordingAlertDismissed = {};
+      state.recordingPausedByAlert = false;
+      state.recordingDeviceFault = null;
       state.captureRestMode = false;
+      App.closeModal('modal-recording-alert');
       App.renderMapTasks();
       App.renderTaskSheet();
-      App.updateMapChrome();
     }
     stopShift();
+    App.updateMapChrome();
     toast('Shift ended');
   },
 
@@ -2647,7 +2602,8 @@ const App = {
         toast('Finish or cancel the current task first');
         return;
       }
-      App.openTerminateRecordingModal();
+      resumeShift();
+      App.updateMapChrome();
       return;
     }
     if (state.shiftActive) {
@@ -2655,7 +2611,9 @@ const App = {
         toast('Finish or cancel the current task first');
         return;
       }
-      App.openTerminateRecordingModal();
+      pauseShift();
+      App.updateMapChrome();
+      toast('Shift paused');
       return;
     }
     if (state.screen !== 'map') App.go('map');

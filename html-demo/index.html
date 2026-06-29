@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260629x" />
+    <link rel="stylesheet" href="styles.css?v=20260629y" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -313,6 +313,15 @@
                 <span class="map-hud-distance-value" data-stat="tasks">0/10</span>
                 <span class="map-hud-distance-label" data-stat="tasks-label">Tasks Done</span>
               </div>
+              <button
+                type="button"
+                class="map-shift-end hidden"
+                id="map-shift-end"
+                onclick="App.endShift()"
+                aria-label="End shift"
+              >
+                End
+              </button>
             </div>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
@@ -875,7 +884,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260629w"></script>
+    <script src="app.js?v=20260629y"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
