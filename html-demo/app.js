@@ -190,6 +190,7 @@ function seg(id, name, address, start, end, opts = {}) {
     display_state: opts.display_state || 'unclaimed',
     claimed_by_me: !!opts.claimed_by_me,
     review_status: opts.review_status,
+    ticket_id: opts.ticket_id,
     duration_minutes: opts.duration_minutes ?? Math.max(30, Math.round((opts.distance_km ?? 1.4) * 22)),
   };
 }
@@ -286,7 +287,7 @@ const state = {
     seg('task_fig_004', 'Figueroa St', '2200 Figueroa St, Los Angeles, CA', { lat: 34.038, lng: -118.278 }, { lat: 34.041, lng: -118.272 }, { display_state: 'claimed', claimed_by_me: true }),
     seg('task_melrose_005', 'Melrose Ave', '7600 Melrose Ave, Los Angeles, CA', { lat: 34.083, lng: -118.365 }, { lat: 34.085, lng: -118.358 }, { display_state: 'completed_local', review_status: 'approved' }),
     seg('task_broadway_006', 'Broadway DTLA', '500 S Broadway, Los Angeles, CA', { lat: 34.047, lng: -118.252 }, { lat: 34.05, lng: -118.245 }, { dispatch_round: 'second' }),
-    seg('task_hollywood_009', 'Street 1928374858', '900 Exposition Blvd, Los Angeles, CA', { lat: 34.101, lng: -118.337 }, { lat: 34.104, lng: -118.33 }, { priority: 'high', distance_from_user_km: 36.6, distance_km: 6.3, duration_minutes: 144, dispatch_round: 'second' }),
+    seg('task_hollywood_009', 'Street 1928374858', '900 Exposition Blvd, Los Angeles, CA', { lat: 34.101, lng: -118.337 }, { lat: 34.104, lng: -118.33 }, { priority: 'high', distance_from_user_km: 36.6, distance_km: 6.3, duration_minutes: 144, dispatch_round: 'second', ticket_id: '1928374858' }),
     seg('task_venice_012', 'Venice Blvd', '1500 Venice Blvd, Los Angeles, CA', { lat: 34.005, lng: -118.44 }, { lat: 34.01, lng: -118.432 }, { display_state: 'claimed', claimed_by_me: true, dispatch_round: 'second' }),
     seg('task_done_high_013', 'Pico Blvd', '2300 Pico Blvd, Santa Monica, CA', { lat: 34.028, lng: -118.455 }, { lat: 34.032, lng: -118.448 }, { display_state: 'completed_local', priority: 'high' }),
     seg('task_second_high_014', 'Lincoln Blvd', '3100 Lincoln Blvd, Santa Monica, CA', { lat: 34.018, lng: -118.47 }, { lat: 34.022, lng: -118.462 }, { dispatch_round: 'second', priority: 'high' }),
@@ -842,6 +843,20 @@ function resumeShift() {
 
 const SHIFT_DEMO_TASK_ID = 'task_vermont_001';
 
+function syncMapTaskSheet() {
+  App.renderTaskSheet();
+  App.updateMapChrome();
+}
+
+function enterMapScreen() {
+  if (!state.map) App.initMap();
+  else state.map.invalidateSize();
+  App.renderMapTasks();
+  syncMapTaskSheet();
+  updateBackgroundRecordingBar();
+  updateMapStatsWidgets();
+}
+
 function clearShiftDemo() {
   (state.shiftDemoTimers || []).forEach((id) => clearTimeout(id));
   state.shiftDemoTimers = [];
@@ -1226,7 +1241,10 @@ function updateBottomNav() {
 
 const App = {
   tabNav(screen) {
-    if (state.screen === screen) return;
+    if (state.screen === screen) {
+      if (screen === 'map') enterMapScreen();
+      return;
+    }
     App.go(screen);
   },
 
@@ -1252,15 +1270,7 @@ const App = {
       App.startPrecheckFlow();
     }
     if (screen === 'map') {
-      setTimeout(() => {
-        if (!state.map) App.initMap();
-        else state.map.invalidateSize();
-        App.renderMapTasks();
-        App.renderTaskSheet();
-        App.updateMapChrome();
-        updateBackgroundRecordingBar();
-        updateMapStatsWidgets();
-      }, 100);
+      setTimeout(enterMapScreen, 100);
     }
     if (screen === 'task-detail') App.renderTaskDetail();
     if (screen === 'settings') App.updateSettingsProfile();
@@ -2237,7 +2247,7 @@ const App = {
     }
 
     sheet.innerHTML = `
-      <div class="task-sheet-body">
+      <div class="task-sheet-card">
         <h2 class="task-sheet-title">${title}</h2>
         <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
         ${tags}
