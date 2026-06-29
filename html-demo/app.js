@@ -205,6 +205,11 @@ function getTaskDurationLabel(t) {
   return `Task duration ${mins}m`;
 }
 
+function formatTaskSheetMeta(t) {
+  const km = Number(t.distance_from_user_km || 0).toFixed(1);
+  return `${km} kilometers away from you | ${t.poi_address}`;
+}
+
 const TASK_SHEET_NAV_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 11 18-8-8 18-2-7-8-3Z" stroke-linejoin="round"/></svg>';
 const TASK_SHEET_COPY_ICON =
@@ -216,7 +221,7 @@ function renderTaskSheetLinks(t) {
       ${TASK_SHEET_NAV_ICON}
       <span>Navigate</span>
     </button>
-    <button type="button" class="task-sheet-link" onclick="App.copyTicketId('${t.task_id}')">
+    <button type="button" class="task-sheet-link" onclick="App.copyTicketId('${t.ticket_id || t.task_id}')">
       ${TASK_SHEET_COPY_ICON}
       <span>Copy ID</span>
     </button>
@@ -1251,6 +1256,10 @@ const App = {
         if (!state.map) App.initMap();
         else state.map.invalidateSize();
         App.renderMapTasks();
+        if (!state.selectedTaskId) {
+          const featured = state.mapTasks.find((t) => t.task_id === 'task_hollywood_009');
+          if (featured) App.selectTask('task_hollywood_009');
+        }
         App.renderTaskSheet();
         App.updateMapChrome();
         updateBackgroundRecordingBar();
@@ -2225,22 +2234,21 @@ const App = {
         status === 'rejected' ? 'is-failed' : status === 'approved' ? 'is-success' : '';
       actions = `<button type="button" class="btn btn-submitted task-sheet-accept ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
     } else if (claimed) {
-      actions = `<button type="button" class="btn btn-success task-sheet-accept" onclick="App.openBegin()">Begin</button>
+      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.openBegin()">Begin</button>
         <button type="button" class="task-sheet-release-link" onclick="App.releaseTask('${t.task_id}')">Release task</button>`;
     } else {
       actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
 
     sheet.innerHTML = `
-      <div class="sheet-handle"></div>
-      <div class="task-sheet-top">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="task-sheet-body">
         <h2 class="task-sheet-title">${title}</h2>
-        <button type="button" class="task-sheet-close" onclick="App.closeTaskSheet()" aria-label="Close">×</button>
+        <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
+        ${tags}
+        ${links}
+        <div class="task-sheet-actions">${actions}</div>
       </div>
-      <p class="task-sheet-meta">${t.distance_from_user_km} kilometers away from you | ${t.poi_address}</p>
-      ${tags}
-      ${links}
-      ${actions}
     `;
   },
 

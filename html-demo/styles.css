@@ -2059,6 +2059,20 @@ body {
   background: var(--bg);
 }
 
+#task-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 680;
+  max-height: min(62%, 420px);
+  overflow-y: auto;
+}
+
+.phone.has-bottom-nav #screen-map.active #task-sheet:not(.hidden) {
+  bottom: 0;
+}
+
 /* Shift recording state is integrated into the map HUD (no top bar). */
 
 #screen-map.active {
@@ -2674,20 +2688,25 @@ body {
 
 /* Task sheet */
 .sheet {
-  background: var(--card);
+  background: #fff;
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
-  padding: 6px 16px 20px;
-  z-index: 600;
+  box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.14);
+  padding: 0 20px 20px;
+  z-index: 680;
   flex-shrink: 0;
 }
 
 .sheet-handle {
-  width: 36px;
+  width: 40px;
   height: 4px;
   background: #d1d5db;
-  border-radius: 2px;
-  margin: 6px auto 14px;
+  border-radius: 999px;
+  margin: 8px auto 16px;
+}
+
+.task-sheet-body {
+  display: flex;
+  flex-direction: column;
 }
 
 .task-sheet-top {
@@ -2711,16 +2730,17 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin: 0 0 14px;
 }
 
 .task-tag {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 5px 10px;
-  border-radius: 8px;
+  letter-spacing: 0.01em;
+  padding: 6px 12px;
+  border-radius: 999px;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .task-tag-high {
@@ -2730,7 +2750,7 @@ body {
 
 .task-tag-second {
   background: #ede9fe;
-  color: #8b5cf6;
+  color: #7c3aed;
 }
 
 .task-tag-duration {
@@ -2741,8 +2761,8 @@ body {
 .task-sheet-links {
   display: flex;
   align-items: center;
-  gap: 22px;
-  margin: 14px 0 18px;
+  gap: 24px;
+  margin: 0 0 20px;
 }
 
 .task-sheet-link {
@@ -2791,18 +2811,19 @@ body {
 }
 
 .task-sheet-title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   color: #111827;
   margin: 0 0 8px;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
 }
 
 .task-sheet-meta {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
   color: #6b7280;
-  margin: 0 0 16px;
+  margin: 0 0 14px;
 }
 
 .task-distance-row {
@@ -2875,12 +2896,35 @@ body {
   cursor: pointer;
 }
 
+.task-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 .task-sheet-accept {
   width: 100%;
-  height: 52px;
-  border-radius: 14px;
+  height: 54px;
+  border-radius: 16px;
   font-size: 17px;
   font-weight: 700;
+  border: none;
+  box-shadow: none;
+}
+
+.task-sheet-accept.btn-submitted {
+  background: #eef2ff;
+  color: #6366f1;
+}
+
+.task-sheet-accept.btn-submitted.is-success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.task-sheet-accept.btn-submitted.is-failed {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .task-sheet-actions.split {
@@ -5295,12 +5339,12 @@ body {
 .bottom-nav {
   flex-shrink: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   min-height: var(--bottom-nav-h);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: #fff;
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+  border-top: 1px solid #eef2f7;
+  box-shadow: 0 -1px 0 rgba(15, 23, 42, 0.04);
   z-index: 720;
 }
 
@@ -5314,14 +5358,14 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   min-height: var(--bottom-nav-h);
-  padding: 6px 4px 8px;
+  padding: 8px 4px 6px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: #94a3b8;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -5329,65 +5373,25 @@ body {
 }
 
 .bottom-nav-item svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
 }
 
 .bottom-nav-item.is-active {
-  color: var(--high);
+  color: var(--primary);
 }
 
 .bottom-nav-item.is-active svg {
-  stroke: var(--high);
+  stroke: var(--primary);
 }
 
 .bottom-nav-item:active {
   opacity: 0.72;
 }
 
-.bottom-nav-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  padding-bottom: 4px;
-}
-
-.bottom-nav-map-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  width: 58px;
-  height: 58px;
-  margin-top: -18px;
-  border: 4px solid #fff;
-  border-radius: 999px;
-  background: var(--high);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.bottom-nav-map-btn svg {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
-.bottom-nav-map-btn.is-active {
-  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.45);
-}
-
-.bottom-nav-map-btn:active {
-  transform: scale(0.96);
+.phone.has-bottom-nav #screen-map.active .map-wrap {
+  padding-bottom: 0;
 }
 
 .phone.has-bottom-nav #screen-tasks .scroll,
