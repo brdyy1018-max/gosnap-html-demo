@@ -2064,12 +2064,15 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   z-index: 710;
   max-height: none;
-  overflow: visible;
+  overflow: hidden;
+  background: #fff;
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.12);
-  padding: 24px 20px 20px;
 }
 
 .phone.has-bottom-nav #screen-map.active #task-sheet.task-sheet:not(.hidden) {
@@ -2691,25 +2694,15 @@ body {
 
 /* Task sheet */
 .sheet {
-  background: #fff;
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.14);
-  padding: 0 20px 20px;
-  z-index: 680;
+  z-index: 710;
   flex-shrink: 0;
 }
 
-.sheet-handle {
-  width: 40px;
-  height: 4px;
-  background: #d1d5db;
-  border-radius: 999px;
-  margin: 8px auto 16px;
-}
-
+.task-sheet-card,
 .task-sheet-body {
   display: flex;
   flex-direction: column;
+  padding: 24px 16px 20px;
 }
 
 .task-sheet-top {
@@ -2758,25 +2751,25 @@ body {
 
 .task-tag-duration {
   background: #f3f4f6;
-  color: #374151;
+  color: #64748b;
 }
 
 .task-sheet-links {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 20px;
   margin: 0 0 18px;
 }
 
 .task-sheet-link {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   border: none;
   background: transparent;
-  color: var(--primary);
+  color: #1a66ff;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -2814,19 +2807,19 @@ body {
 }
 
 .task-sheet-title {
-  font-size: 22px;
-  font-weight: 800;
-  color: #111827;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
   margin: 0 0 6px;
-  letter-spacing: -0.35px;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .task-sheet-meta {
-  font-size: 14px;
-  line-height: 1.4;
-  color: #6b7280;
-  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #64748b;
+  margin: 0 0 14px;
 }
 
 .task-distance-row {
@@ -5348,8 +5341,8 @@ body {
   min-height: var(--bottom-nav-h);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: #fff;
-  border-top: 1px solid #eef2f7;
-  box-shadow: 0 -1px 0 rgba(15, 23, 42, 0.04);
+  border-top: 1px solid #e5e7eb;
+  box-shadow: none;
   z-index: 720;
 }
 
@@ -5384,11 +5377,11 @@ body {
 }
 
 .bottom-nav-item.is-active {
-  color: var(--primary);
+  color: #1a66ff;
 }
 
 .bottom-nav-item.is-active svg {
-  stroke: var(--primary);
+  stroke: #1a66ff;
 }
 
 .bottom-nav-item:active {
