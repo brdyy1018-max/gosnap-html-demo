@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260630d" />
+    <link rel="stylesheet" href="styles.css?v=20260630n" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -390,7 +390,7 @@
           <h2>Daily Summary</h2>
           <button type="button" class="icon-btn" onclick="App.renderDailySummary()" aria-label="Refresh">↻</button>
         </div>
-        <div class="scroll daily-scroll" id="daily-summary-body"></div>
+        <div class="daily-page-body" id="daily-summary-body"></div>
       </div>
 
       <!-- TASK DETAIL -->
@@ -531,23 +531,6 @@
             </div>
           </div>
 
-          <h3 class="settings-section-title">Recording Alerts (Demo)</h3>
-          <p class="settings-demo-hint">Preview recording interruption dialogs. If you are not recording, the demo jumps into a sample capture first.</p>
-          <div class="settings-group">
-            <div class="settings-row" onclick="App.previewRecordingAlert('device_disconnect')">
-              <span class="settings-row-left">Preview: GoPro Disconnected</span>
-              <span class="settings-row-chevron" aria-hidden="true">›</span>
-            </div>
-            <div class="settings-row" onclick="App.previewRecordingAlert('storage_full')">
-              <span class="settings-row-left">Preview: Storage Full</span>
-              <span class="settings-row-chevron" aria-hidden="true">›</span>
-            </div>
-            <div class="settings-row" onclick="App.previewRecordingAlert('wifi_lost')">
-              <span class="settings-row-left">Preview: WiFi Lost</span>
-              <span class="settings-row-chevron" aria-hidden="true">›</span>
-            </div>
-          </div>
-
           <div class="settings-group">
             <div class="settings-row settings-row--logout" onclick="App.openLogoutModal()">
               <span class="settings-row-left">
@@ -636,7 +619,7 @@
         <div class="ios-location-alert">
           <h3 class="ios-alert-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
           <p class="ios-alert-body">
-            Your precise location is used to verify you are at the task start point before recording.
+            Your precise location is used to show your position on the map and record routes accurately.
           </p>
           <div class="ios-map-preview">
             <div class="ios-precise-pill">
@@ -864,7 +847,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260630e"></script>
+    <script src="app.js?v=20260630o"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

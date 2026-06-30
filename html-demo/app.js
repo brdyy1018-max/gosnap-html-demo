@@ -82,7 +82,6 @@ const PRECONDITION_ROWS = [
     icon: 'gps',
     ok: 'Location ready',
     err: 'Location Access Denied',
-    distanceErr: 'Distance to task does not meet requirements',
   },
   {
     id: 'storage',
@@ -114,8 +113,6 @@ function getPrecheckProgress(step) {
   return 0;
 }
 
-const TASK_DISTANCE_MAX_KM = 1.0;
-
 function preconditionRowIcon(name) {
   const icons = {
     bluetooth:
@@ -134,28 +131,35 @@ function getSelectedMapTask() {
   return state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
 }
 
-function checkTaskDistanceOk() {
+const TASK_PROXIMITY_MAX_KM = 0.5;
+const PROXIMITY_FAIL_TOAST = 'The target needs to be within 500 meters of the location...';
+
+function isTaskWithinProximity() {
   const t = getSelectedMapTask();
   if (!t) return true;
-  return (t.distance_km || 0) <= TASK_DISTANCE_MAX_KM;
+  return (t.distance_from_user_km || 0) <= TASK_PROXIMITY_MAX_KM;
+}
+
+function shouldFailProximityCheck(alreadyRetried) {
+  if (alreadyRetried) return false;
+  return state.settings.simulateFailedChecks || !isTaskWithinProximity();
+}
+
+function resetBeginCaptureState() {
+  state.beginPreconditionPassed = false;
+  state.beginProximityRetried = false;
+  state.beginButtonLoading = false;
+  state.completeProximityRetried = false;
+  state.completeButtonLoading = false;
 }
 
 function syncGpsPrecondition() {
-  state.preconditions.gps =
-    state.preconditionGps.authorized && state.preconditionGps.distanceOk;
+  state.preconditions.gps = state.preconditionGps.authorized;
 }
 
 function getPreconditionSubtitle(row) {
   if (row.id === 'gps') {
-    if (state.preconditions.gps) return row.ok;
-    if (
-      state.preconditionGps.authorized &&
-      !state.preconditionGps.distanceOk &&
-      !state.shiftStartPending
-    ) {
-      return row.distanceErr;
-    }
-    return row.err;
+    return state.preconditions.gps ? row.ok : row.err;
   }
   return state.preconditions[row.id] ? row.ok : row.err;
 }
@@ -163,14 +167,6 @@ function getPreconditionSubtitle(row) {
 function getPreconditionAction(row) {
   if (state.preconditions[row.id]) {
     return '<span class="pre-card-check" aria-label="Ready"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 10.5 8.5 14 15 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-  }
-  if (
-    row.id === 'gps' &&
-    state.preconditionGps.authorized &&
-    !state.preconditionGps.distanceOk &&
-    !state.shiftStartPending
-  ) {
-    return '<button type="button" class="pre-card-action pre-card-action--refresh" onclick="App.refreshGpsDistance()">Refresh ↻</button>';
   }
   return `<button type="button" class="pre-card-action" onclick="App.fixPrecondition('${row.id}')">Set ›</button>`;
 }
@@ -242,6 +238,14 @@ const RECORDING_ALERTS = {
   },
 };
 
+function renderTaskCardCloseBtn(handler) {
+  return `<button type="button" class="task-card-close" onclick="${handler}" aria-label="Close">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18"/>
+    </svg>
+  </button>`;
+}
+
 function renderTaskSheetLinks(t) {
   return `<div class="task-sheet-links">
     <button type="button" class="task-sheet-link" onclick="toast('Opening Google Maps…')">
@@ -267,6 +271,7 @@ const state = {
   taskDateSelected: null,
   selectedRecordId: null,
   selectedTaskId: null,
+  dismissedRecordIds: [],
   mapMode: 'idle', // idle | navigating | recording | completing | review
   recSeconds: 0,
   recInterval: null,
@@ -286,6 +291,11 @@ const state = {
   recordingDeviceFault: null,
   captureRestMode: false,
   skipSafety: false,
+  beginPreconditionPassed: false,
+  beginProximityRetried: false,
+  beginButtonLoading: false,
+  completeProximityRetried: false,
+  completeButtonLoading: false,
   deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
   preconditionGps: { authorized: false, distanceOk: false },
   preconditions: { bluetooth: true, network: true, gps: true, storage: true },
@@ -494,10 +504,14 @@ function renderCaptureControls() {
   }
 
   if (state.mapMode === 'completing') {
+    const loading = state.completeButtonLoading;
+    const completeBtn = loading
+      ? '<button type="button" class="capture-complete is-loading" disabled aria-label="Complete task"><span class="capture-btn-spinner" aria-hidden="true"></span></button>'
+      : '<button type="button" class="capture-complete" onclick="App.completeTask()" aria-label="Complete task">✓</button>';
     el.innerHTML =
       '<button type="button" class="capture-cancel" disabled aria-label="Cancel">×</button>' +
       '<button type="button" class="capture-stop is-disabled" disabled aria-label="Stopped"></button>' +
-      '<button type="button" class="capture-complete" onclick="App.completeTask()" aria-label="Complete task">✓</button>';
+      completeBtn;
   }
 }
 
@@ -695,8 +709,7 @@ function syncPreconditionsFromDevice() {
   state.preconditions.network = state.deviceChecks.network;
   state.preconditions.storage = state.deviceChecks.storage;
   if (state.deviceChecks.gps) {
-    state.preconditionGps.authorized = true;
-    state.preconditionGps.distanceOk = checkTaskDistanceOk();
+    state.preconditionGps = { authorized: true, distanceOk: true };
   } else {
     state.preconditionGps = { authorized: false, distanceOk: false };
   }
@@ -840,7 +853,6 @@ function beginShiftRecording() {
 function startShift() {
   if (state.shiftActive) return;
   beginShiftRecording();
-  toastSuccess('Shift started');
   runShiftDemo();
 }
 
@@ -867,11 +879,11 @@ function resumeShift() {
   state.shiftPaused = false;
   state.shiftActive = true;
   startBackgroundRecording();
-  toastSuccess('Shift resumed');
   updateMapStatsWidgets();
 }
 
 const SHIFT_DEMO_TASK_ID = 'task_vermont_001';
+const SHIFT_DEMO_STEP_MS = 3000;
 
 function syncMapTaskSheet() {
   App.renderTaskSheet();
@@ -1055,7 +1067,7 @@ function runShiftDemo() {
   scheduleShiftDemo(() => {
     if (!state.shiftActive) return;
     toast('Driving to nearest task…');
-  }, 700);
+  }, SHIFT_DEMO_STEP_MS);
 
   scheduleShiftDemo(() => {
     if (!state.shiftActive) return;
@@ -1067,12 +1079,12 @@ function runShiftDemo() {
     App.renderTaskSheet();
     App.updateMapChrome();
     toastSuccess('Location verified — task nearby');
-  }, 2400);
+  }, SHIFT_DEMO_STEP_MS * 2);
 
   scheduleShiftDemo(() => {
     if (!state.shiftActive) return;
     App.runShiftDemoTaskFlow(taskId);
-  }, 3400);
+  }, SHIFT_DEMO_STEP_MS * 3);
 }
 
 function toast(msg) {
@@ -1230,7 +1242,7 @@ function formatDailySummaryStatus(status) {
   if (status === 'pass') return 'Completed';
   if (status === 'fail') return 'Failed';
   if (status === 'progress') return 'In Progress';
-  if (status === 'pending') return 'Day Off';
+  if (status === 'pending') return 'Holiday';
   return 'No Data';
 }
 
@@ -1328,7 +1340,11 @@ function renderTaskDateCalendar() {
 }
 
 function filterRecordsForTasksPage() {
-  let rows = state.records.filter((r) => ['approved', 'pending', 'reviewing', 'rejected'].includes(r.status));
+  let rows = state.records.filter(
+    (r) =>
+      ['approved', 'pending', 'reviewing', 'rejected'].includes(r.status) &&
+      !state.dismissedRecordIds.includes(r.task_id)
+  );
   if (state.taskDateSelected) {
     const selected = new Date(`${state.taskDateSelected}T00:00:00`);
     const next = new Date(selected);
@@ -1795,7 +1811,6 @@ const App = {
       state.precheckDiscoveredDevices = ['GoPro-1', 'GoPro-2'];
       state.precheckSetupPhase = 'ready';
       App.renderPrecheckDeviceUI();
-      toast('Found 2 nearby devices');
     }, delay);
   },
 
@@ -2058,13 +2073,8 @@ const App = {
       state.preconditionGps = { authorized: false, distanceOk: false };
       state.deviceChecks.gps = false;
     } else {
-      state.preconditionGps.authorized = true;
+      state.preconditionGps = { authorized: true, distanceOk: true };
       state.deviceChecks.gps = true;
-      state.preconditionGps.distanceOk = fromShiftStart
-        ? true
-        : state.settings.simulateFailedChecks
-          ? false
-          : checkTaskDistanceOk();
     }
     syncGpsPrecondition();
     if (state.screen === 'precheck' && state.precheckStep === 'device') {
@@ -2080,33 +2090,6 @@ const App = {
     if (state.preconditionFixReturn || fromShiftStart) {
       document.getElementById('modal-precondition').classList.add('show');
     }
-  },
-
-  refreshGpsDistance() {
-    if (!state.preconditionGps.authorized) return;
-    if (state.shiftStartPending) {
-      state.preconditionGps.distanceOk = true;
-      syncGpsPrecondition();
-      App.renderPrecondition();
-      toast('Location authorized');
-      return;
-    }
-    toast('Checking location…');
-    setTimeout(() => {
-      if (state.settings.simulateFailedChecks) {
-        state.preconditionGps.distanceOk = true;
-      } else {
-        state.preconditionGps.distanceOk = checkTaskDistanceOk();
-        if (!state.preconditionGps.distanceOk) {
-          toast('Still too far from task start');
-          return;
-        }
-      }
-      syncGpsPrecondition();
-      App.renderPrecondition();
-      App.updateMapChrome();
-      toastSuccess('Location meets task requirements');
-    }, 700);
   },
 
   openStorageSettings() {
@@ -2221,7 +2204,7 @@ const App = {
       deviceBatt.textContent = '78';
       deviceBattWrap.className = 'device-batt-wrap warn';
       statusBar.classList.remove('is-online');
-      deviceSignal.dataset.level = '1';
+      deviceSignal.dataset.level = '0';
     } else if (state.recordingDeviceFault === 'wifi_lost') {
       deviceDot.className = 'device-dot err';
       deviceConn.textContent = 'NO WIFI';
@@ -2236,7 +2219,7 @@ const App = {
       deviceBattWrap.className = 'device-batt-wrap warn has-bolt';
       statusBar.classList.remove('is-online');
       deviceSignal.dataset.level = '3';
-    } else if (allPreconditionsOk()) {
+    } else if (!state.settings.simulateFailedChecks || allPreconditionsOk()) {
       deviceDot.className = 'device-dot';
       deviceConn.textContent = 'CONNECTED';
       deviceBatt.textContent = state.onboardingComplete ? '98' : '51';
@@ -2249,8 +2232,10 @@ const App = {
       deviceBatt.textContent = '14';
       deviceBattWrap.className = 'device-batt-wrap low';
       statusBar.classList.remove('is-online');
-      deviceSignal.dataset.level = '2';
+      deviceSignal.dataset.level = '0';
     }
+
+    statusBar.classList.toggle('is-disconnected', deviceConn.textContent === 'DISCONNECTED');
 
     if (deviceBattBolt) {
       deviceBattBolt.classList.toggle('hidden', !deviceBattWrap.classList.contains('has-bolt'));
@@ -2384,6 +2369,7 @@ const App = {
 
   selectTask(taskId) {
     if (['navigating', 'recording', 'completing'].includes(state.mapMode)) return;
+    resetBeginCaptureState();
     state.selectedTaskId = taskId;
     App.renderMapTasks();
     App.renderTaskSheet();
@@ -2392,10 +2378,19 @@ const App = {
 
   closeTaskSheet() {
     state.selectedTaskId = null;
+    resetBeginCaptureState();
     if (state.mapMode === 'review') state.mapMode = 'idle';
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
+  },
+
+  dismissTaskCard(taskId) {
+    if (!state.dismissedRecordIds.includes(taskId)) {
+      state.dismissedRecordIds.push(taskId);
+    }
+    if (state.selectedRecordId === taskId) state.selectedRecordId = null;
+    App.renderTaskList();
   },
 
   renderTaskSheet() {
@@ -2423,19 +2418,30 @@ const App = {
       actions = `<button type="button" class="btn btn-submitted task-sheet-accept ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
     } else if (claimed) {
       actionClass += ' split';
+      const beginLoading = state.beginButtonLoading;
+      const beginBtnClass = `task-sheet-begin${beginLoading ? ' is-loading' : ''}`;
+      const beginBtnAttrs = beginLoading ? ' disabled aria-busy="true"' : '';
+      const beginBtnContent = beginLoading
+        ? '<span class="task-sheet-begin-spinner" aria-hidden="true"></span>Begin'
+        : 'Begin';
       actions = `<button type="button" class="task-release-btn" onclick="App.releaseTask('${t.task_id}')">
         ${TASK_SHEET_RELEASE_ICON}
         <span>Release</span>
       </button>
-      <button type="button" class="task-sheet-begin" onclick="App.openBegin()">Begin</button>`;
+      <button type="button" class="${beginBtnClass}"${beginBtnAttrs} onclick="App.openBegin()">${beginBtnContent}</button>`;
     } else {
       actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
 
     sheet.innerHTML = `
       <div class="task-sheet-card">
-        <h2 class="task-sheet-title">${title}</h2>
-        <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
+        <div class="task-sheet-head">
+          <div class="task-sheet-head-copy">
+            <h2 class="task-sheet-title">${title}</h2>
+            <p class="task-sheet-meta">${formatTaskSheetMeta(t)}</p>
+          </div>
+          ${renderTaskCardCloseBtn('App.closeTaskSheet()')}
+        </div>
         ${tags}
         ${links}
         <div class="${actionClass}">${actions}</div>
@@ -2448,6 +2454,7 @@ const App = {
     if (!t || !t.claimed_by_me) return;
     t.display_state = 'unclaimed';
     t.claimed_by_me = false;
+    resetBeginCaptureState();
     App.renderMapTasks();
     App.renderTaskSheet();
     toast('Task released');
@@ -2465,11 +2472,40 @@ const App = {
   },
 
   openBegin() {
-    if (state.skipSafety) {
-      App.openPrecondition();
+    if (state.beginButtonLoading) return;
+    if (!state.beginPreconditionPassed) {
+      if (state.skipSafety) {
+        App.openPrecondition();
+        return;
+      }
+      document.getElementById('modal-safety').classList.add('show');
       return;
     }
-    document.getElementById('modal-safety').classList.add('show');
+    App.tryBeginCapture();
+  },
+
+  tryBeginCapture() {
+    if (state.beginButtonLoading) return;
+
+    if (shouldFailProximityCheck(state.beginProximityRetried)) {
+      state.beginButtonLoading = true;
+      App.renderTaskSheet();
+      toast(PROXIMITY_FAIL_TOAST);
+      setTimeout(() => {
+        state.beginProximityRetried = true;
+        state.beginButtonLoading = false;
+        App.renderTaskSheet();
+      }, 900);
+      return;
+    }
+
+    resetBeginCaptureState();
+    state.recSeconds = 0;
+    state.recordingAlertDismissed = {};
+    state.captureRestMode = false;
+    App.renderMapTasks({ skipFit: true });
+    App.renderTaskSheet();
+    App.tapRecord();
   },
 
   confirmSafety() {
@@ -2533,12 +2569,12 @@ const App = {
       startShift();
       return;
     }
-    state.recSeconds = 0;
-    state.recordingAlertDismissed = {};
-    state.captureRestMode = false;
+    state.beginPreconditionPassed = true;
+    state.beginProximityRetried = false;
+    state.beginButtonLoading = false;
     App.renderMapTasks({ skipFit: true });
     App.renderTaskSheet();
-    App.tapRecord();
+    App.updateMapChrome();
   },
 
   tapRecord() {
@@ -2559,14 +2595,30 @@ const App = {
   },
 
   completeTask() {
+    if (state.completeButtonLoading) return;
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
     if (!t || state.mapMode !== 'completing') return;
+
+    if (shouldFailProximityCheck(state.completeProximityRetried)) {
+      state.completeButtonLoading = true;
+      App.updateMapChrome();
+      toast(PROXIMITY_FAIL_TOAST);
+      setTimeout(() => {
+        state.completeProximityRetried = true;
+        state.completeButtonLoading = false;
+        App.updateMapChrome();
+      }, 900);
+      return;
+    }
+
     t.display_state = 'completed_local';
     t.review_status = 'awaiting';
     state.todayLoggedTasks = Number(state.todayLoggedTasks || 0) + 1;
     state.mapMode = 'review';
     clearInterval(state.recInterval);
     state.recSeconds = 0;
+    state.completeProximityRetried = false;
+    state.completeButtonLoading = false;
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2658,13 +2710,13 @@ const App = {
       state.recordingPausedByAlert = false;
       state.recordingDeviceFault = null;
       state.captureRestMode = false;
+      resetBeginCaptureState();
       App.closeModal('modal-recording-alert');
       App.renderMapTasks();
       App.renderTaskSheet();
     }
     stopShift();
     App.updateMapChrome();
-    toast('Shift ended');
   },
 
   toggleShift() {
@@ -2688,7 +2740,6 @@ const App = {
       }
       pauseShift();
       App.updateMapChrome();
-      toast('Shift paused');
       return;
     }
     if (state.screen !== 'map') App.go('map');
@@ -2701,7 +2752,7 @@ const App = {
     if (!t || !state.shiftActive) return;
     if (t.display_state === 'unclaimed' || !t.claimed_by_me) {
       App.acceptTask(taskId);
-      scheduleShiftDemo(() => App.runShiftDemoCapture(taskId), 900);
+      scheduleShiftDemo(() => App.runShiftDemoCapture(taskId), SHIFT_DEMO_STEP_MS);
       return;
     }
     App.runShiftDemoCapture(taskId);
@@ -2728,18 +2779,19 @@ const App = {
     scheduleShiftDemo(() => {
       if (!state.shiftActive) return;
       App.tapRecord();
-    }, 1400);
+    }, SHIFT_DEMO_STEP_MS);
 
     scheduleShiftDemo(() => {
       if (!state.shiftActive || state.mapMode !== 'recording') return;
       App.stopRecording();
-    }, 3800);
+    }, SHIFT_DEMO_STEP_MS * 2);
 
     scheduleShiftDemo(() => {
       if (!state.shiftActive || state.mapMode !== 'completing') return;
+      state.completeProximityRetried = true;
       App.completeTask();
       toastSuccess('Task submitted');
-    }, 4200);
+    }, SHIFT_DEMO_STEP_MS * 3);
 
     scheduleShiftDemo(() => {
       if (!state.shiftActive) return;
@@ -2749,7 +2801,7 @@ const App = {
       App.renderTaskSheet();
       App.updateMapChrome();
       App.locateUser();
-    }, 5000);
+    }, SHIFT_DEMO_STEP_MS * 4);
   },
 
   openLogoutModal() {
@@ -2939,6 +2991,7 @@ const App = {
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
 
     return `<article class="task-submit-card" onclick="App.openTaskDetail('${r.task_id}')">
+      ${renderTaskCardCloseBtn(`event.stopPropagation();App.dismissTaskCard('${r.task_id}')`)}
       <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}"></div>
       <div class="task-submit-body">
         <h4 class="task-submit-title">${title}</h4>
@@ -2990,12 +3043,7 @@ const App = {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const monthData = getDailySummaryMonthData(year, month);
-    const selected = state.dailySummarySelectedDay;
-    const selectedInfo = getDailySummaryDayInfo(year, month, selected);
     const targets = state.dailySummaryTargets;
-    const kmPct = Math.min(100, Math.round((selectedInfo.km / targets.km) * 100));
-    const tasksPct = Math.min(100, Math.round((selectedInfo.tasks / targets.tasks) * 100));
-    const detailTitle = formatDailySummaryDetailTitle(year, month, selected);
 
     let cells = '';
     for (let i = 0; i < firstDow; i += 1) {
@@ -3003,22 +3051,21 @@ const App = {
     }
     for (let day = 1; day <= daysInMonth; day += 1) {
       const info = monthData[day] || { status: 'empty', km: 0, tasks: 0 };
-      const isSelected = day === selected;
       const hasMetrics = ['pass', 'fail'].includes(info.status);
       const kmLine = hasMetrics ? `${info.km.toFixed(1)}km` : '';
       const tasksLine = hasMetrics ? `${info.tasks}/${targets.tasks}` : '';
-      cells += `<button type="button" class="daily-cell daily-cell--${info.status}${isSelected ? ' is-selected' : ''}" onclick="App.selectDailySummaryDay(${day})" aria-label="Day ${day}, ${formatDailySummaryStatus(info.status)}" aria-pressed="${isSelected}">
+      cells += `<div class="daily-cell daily-cell--${info.status}" aria-label="Day ${day}, ${formatDailySummaryStatus(info.status)}">
         <span class="daily-cell-day">${day}</span>
         <span class="daily-cell-icon-wrap">${renderDailySummaryStatusIcon(info.status)}</span>
         <span class="daily-cell-meta">
           <span class="daily-cell-meta-line">${kmLine || '&nbsp;'}</span>
           <span class="daily-cell-meta-line">${tasksLine || '&nbsp;'}</span>
         </span>
-      </button>`;
+      </div>`;
     }
 
     el.innerHTML = `
-      <section class="daily-calendar-card" aria-label="Attendance calendar">
+      <section class="daily-calendar-card" aria-label="Monthly attendance">
         <div class="daily-summary-month">
           <button type="button" class="daily-month-nav" onclick="App.shiftDailySummaryMonth(-1)" aria-label="Previous month">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -3032,35 +3079,13 @@ const App = {
         <div class="daily-legend" aria-hidden="true">
           <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pass"></i>Completed</span>
           <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--fail"></i>Missed</span>
-          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pending"></i>Day Off</span>
+          <span class="daily-legend-item"><i class="daily-legend-dot daily-legend-dot--pending"></i>Holiday</span>
         </div>
 
         <div class="daily-weekdays">
           <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
         </div>
         <div class="daily-calendar-grid">${cells}</div>
-      </section>
-
-      <section class="daily-detail-card">
-        <h3 class="daily-detail-title">${detailTitle}</h3>
-        <div class="daily-detail-row">
-          <div class="daily-detail-head">
-            <span class="daily-detail-label">Daily KM</span>
-            <span class="daily-detail-value">${selectedInfo.km.toFixed(1)} km / ${targets.km} km</span>
-          </div>
-          <div class="daily-progress" role="progressbar" aria-valuenow="${kmPct}" aria-valuemin="0" aria-valuemax="100">
-            <span class="daily-progress-fill" style="width:${kmPct}%"></span>
-          </div>
-        </div>
-        <div class="daily-detail-row">
-          <div class="daily-detail-head">
-            <span class="daily-detail-label">Daily Tasks</span>
-            <span class="daily-detail-value">${selectedInfo.tasks} tasks / ${targets.tasks} tasks</span>
-          </div>
-          <div class="daily-progress" role="progressbar" aria-valuenow="${tasksPct}" aria-valuemin="0" aria-valuemax="100">
-            <span class="daily-progress-fill daily-progress-fill--tasks" style="width:${tasksPct}%"></span>
-          </div>
-        </div>
       </section>`;
   },
 
