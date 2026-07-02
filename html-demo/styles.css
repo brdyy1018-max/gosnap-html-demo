@@ -3868,6 +3868,51 @@ body {
   color: #dc2626;
 }
 
+.task-upload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  width: fit-content;
+}
+
+.task-upload-status--uploading {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.task-upload-status--uploaded {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.task-upload-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(194, 65, 12, 0.22);
+  border-top-color: #ea580c;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: task-upload-spin 0.75s linear infinite;
+}
+
+.task-upload-check {
+  display: block;
+  flex-shrink: 0;
+}
+
+@keyframes task-upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .task-submit-body {
   flex: 1;
   min-width: 0;
@@ -3886,7 +3931,7 @@ body {
 
 .task-submit-time,
 .task-submit-meta {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   font-size: 13px;
   color: #9ca3af;
   line-height: 1.4;

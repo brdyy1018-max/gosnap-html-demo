@@ -358,6 +358,7 @@ const state = {
       status: 'approved',
       audit_stage: 'completed',
       thumb: 'pool',
+      upload_status: 'uploaded',
     },
     {
       task_id: 'street_3827948374',
@@ -376,6 +377,7 @@ const state = {
       status: 'pending',
       audit_stage: 'reviewing',
       thumb: 'palm',
+      upload_status: 'uploading',
     },
     {
       task_id: 'street_2894785643',
@@ -394,6 +396,7 @@ const state = {
       status: 'rejected',
       audit_stage: 'completed',
       thumb: 'street',
+      upload_status: 'uploaded',
     },
     {
       task_id: 'task_vermont_yesterday',
@@ -412,6 +415,7 @@ const state = {
       status: 'pending',
       audit_stage: 'reviewing',
       thumb: 'pool',
+      upload_status: 'uploading',
     },
   ],
   progressTasks: [
@@ -1272,6 +1276,24 @@ function getRecordStatusTone(status) {
   if (status === 'approved') return ['#dcfce7', '#15803d'];
   if (status === 'rejected') return ['#fee2e2', '#dc2626'];
   return ['#fef3c7', '#a16207'];
+}
+
+function getRecordUploadStatus(r) {
+  return r.upload_status === 'uploading' ? 'uploading' : 'uploaded';
+}
+
+function renderTaskUploadStatusBadge(r) {
+  const status = getRecordUploadStatus(r);
+  if (status === 'uploading') {
+    return `<span class="task-upload-status task-upload-status--uploading"><span class="task-upload-spinner" aria-hidden="true"></span>Uploading</span>`;
+  }
+  return `<span class="task-upload-status task-upload-status--uploaded"><svg class="task-upload-check" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 6l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Uploaded</span>`;
+}
+
+function formatRecordDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m${s}s`;
 }
 
 function groupRecordsByDay(records) {
@@ -2614,6 +2636,30 @@ const App = {
     t.display_state = 'completed_local';
     t.review_status = 'awaiting';
     state.todayLoggedTasks = Number(state.todayLoggedTasks || 0) + 1;
+    const durationSec = state.recSeconds || 0;
+    const newRecord = {
+      task_id: t.task_id,
+      title: getTaskSheetTitle(t),
+      mapping_title: t.poi_name,
+      ticket_id: t.ticket_id || `490${Date.now().toString().slice(-6)}`,
+      address: t.poi_address,
+      shot_at: new Date().toISOString(),
+      duration: formatRecordDuration(durationSec || 780),
+      size: '18.5M',
+      distance_km: t.distance_km,
+      status: 'pending',
+      audit_stage: 'submitted',
+      thumb: ['pool', 'palm', 'street'][Math.floor(Math.random() * 3)],
+      upload_status: 'uploading',
+    };
+    state.records.unshift(newRecord);
+    setTimeout(() => {
+      const rec = state.records.find((x) => x.task_id === newRecord.task_id && x.shot_at === newRecord.shot_at);
+      if (rec) {
+        rec.upload_status = 'uploaded';
+        if (state.screen === 'tasks') App.renderTaskList();
+      }
+    }, 4000);
     state.mapMode = 'review';
     clearInterval(state.recInterval);
     state.recSeconds = 0;
@@ -2995,6 +3041,7 @@ const App = {
       <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}"></div>
       <div class="task-submit-body">
         <h4 class="task-submit-title">${title}</h4>
+        ${renderTaskUploadStatusBadge(r)}
         <p class="task-submit-time">${formatRecordDate(r.shot_at)}</p>
         <p class="task-submit-meta">${r.duration} | ${r.size}</p>
         <div class="task-submit-actions">
