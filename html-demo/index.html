@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260630q" />
+    <link rel="stylesheet" href="styles.css?v=20260630r" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -360,15 +360,22 @@
       <div class="screen" id="screen-tasks">
         <div class="tasks-header">
           <button type="button" class="icon-btn" onclick="App.go('map')" aria-label="Back">←</button>
-          <h2>History</h2>
+          <h2>Tasks</h2>
           <div class="tasks-header-actions">
-            <button type="button" class="tasks-header-quiet-btn" onclick="App.openDailySummary()" aria-label="Daily summary">
+            <button type="button" class="tasks-header-icon-btn" onclick="App.openDailySummary()" aria-label="Daily summary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
                 <rect x="4" y="5" width="16" height="16" rx="2" />
                 <path d="M8 3v4M16 3v4M4 11h16" stroke-linecap="round" />
+                <path d="m9 15.5 1.8 1.8L15 13" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
-            <button type="button" class="icon-btn" onclick="App.refreshTaskList()" aria-label="Refresh">↻</button>
+            <button type="button" class="tasks-header-icon-btn" onclick="App.refreshTaskList()" aria-label="Refresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <path d="M20 12a8 8 0 10-2.3 5.7" stroke-linecap="round" />
+                <path d="M20 12v-5h-5M4 12a8 8 0 0014.3-5.7" stroke-linecap="round" />
+                <path d="M4 12v5h5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
           </div>
         </div>
         <div class="tasks-summary" id="tasks-summary"></div>
@@ -841,7 +848,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260630q"></script>
+    <script src="app.js?v=20260630r"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
