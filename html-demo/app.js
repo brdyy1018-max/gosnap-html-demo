@@ -317,6 +317,14 @@ const state = {
   precheckDiscoveredDevices: [],
   precheckSetupPhase: 'idle', // idle | location | bluetooth | scanning | ready
   onboardingComplete: false,
+  uploadDeviceConnected: false,
+  uploadBatchRunning: false,
+  uploadQueue: [
+    { collect_id: 'c_upload_101', task_id: 'task_upload_101', title: 'S Vermont Ave', size: '42.1M', state: 'pending', progress: 0, retry_count: 0 },
+    { collect_id: 'c_pending_103', task_id: 'task_pending_103', title: 'Wilshire Blvd', size: '38.5M', state: 'pending', progress: 0, retry_count: 1 },
+    { collect_id: 'c_fail_106', task_id: 'task_fail_106', title: 'Crenshaw Blvd', size: '51.0M', state: 'failed', progress: 0, retry_count: 2 },
+    { collect_id: 'c_done_100', task_id: 'task_done_100', title: 'Sorrento Valley', size: '50.2M', state: 'uploaded', progress: 100, retry_count: 0 },
+  ],
   statusBarCollapsed: false,
   splashTimer: null,
   auth: null,
@@ -1462,6 +1470,7 @@ const App = {
       precheck: 'screen-precheck',
       map: 'screen-map',
       tasks: 'screen-tasks',
+      'upload-status': 'screen-upload-status',
       'daily-summary': 'screen-daily-summary',
       'task-detail': 'screen-task-detail',
       'progress-map': 'screen-progress-map',
@@ -1480,6 +1489,7 @@ const App = {
       setTimeout(enterMapScreen, 100);
     }
     if (screen === 'task-detail') App.renderTaskDetail();
+    if (screen === 'upload-status') App.renderUploadStatus();
     if (screen === 'settings') App.updateSettingsProfile();
     if (screen === 'version') App.syncSettingsToggles();
     if (screen === 'progress-map') {
@@ -3068,6 +3078,118 @@ const App = {
     toast('Refreshed');
   },
 
+  openUploadStatus() {
+    App.go('upload-status');
+  },
+
+  renderUploadStatus() {
+    const body = document.getElementById('upload-status-body');
+    const footer = document.getElementById('upload-status-footer');
+    if (!body || !footer) return;
+
+    const connected = state.uploadDeviceConnected;
+    const order = { pending: 0, failed: 1, uploading: 2, uploaded: 3 };
+    const items = [...state.uploadQueue].sort((a, b) => order[a.state] - order[b.state]);
+    const ready = items.filter((i) => i.state === 'pending' || i.state === 'failed').length;
+
+    const banner = connected
+      ? `<div class="upload-device-banner upload-device-banner--ok">
+          <div><strong>Connected · GoPro HERO</strong><p>Ready for batch upload from this device</p></div>
+        </div>`
+      : `<div class="upload-device-banner upload-device-banner--warn">
+          <div><strong>Device not connected</strong><p>Connect GoPro to pull local media and upload</p></div>
+          <button type="button" class="btn btn-primary upload-connect-btn" onclick="App.connectUploadDevice()">Connect</button>
+        </div>`;
+
+    const list = items.length
+      ? items
+          .map((i) => {
+            const label =
+              i.state === 'pending'
+                ? 'Pending'
+                : i.state === 'failed'
+                  ? 'Failed'
+                  : i.state === 'uploading'
+                    ? 'Uploading'
+                    : 'Uploaded';
+            const tone =
+              i.state === 'failed'
+                ? 'fail'
+                : i.state === 'uploading'
+                  ? 'up'
+                  : i.state === 'uploaded'
+                    ? 'done'
+                    : 'pend';
+            const bar =
+              i.state === 'uploading' || (i.state === 'uploaded' && i.progress > 0)
+                ? `<div class="upload-progress"><span style="width:${i.progress}%"></span></div>
+                   ${i.state === 'uploading' ? `<p class="upload-progress-label">${i.progress}%</p>` : ''}`
+                : '';
+            return `<article class="upload-queue-card">
+              <div class="upload-queue-top">
+                <h4>${i.title}</h4>
+                <span class="upload-badge upload-badge--${tone}">${label}</span>
+              </div>
+              <p class="upload-queue-meta">${i.size} · Task ${i.task_id}${i.retry_count ? ` · Retry ${i.retry_count}` : ''}</p>
+              ${bar}
+            </article>`;
+          })
+          .join('')
+      : '<div class="task-empty">Upload queue is empty</div>';
+
+    body.innerHTML = `${banner}<p class="upload-list-hint">${ready > 0 ? `${ready} waiting to upload` : 'No pending uploads'}</p>${list}`;
+
+    const disabled = state.uploadBatchRunning || ready === 0 || !connected;
+    footer.innerHTML = `
+      <button type="button" class="btn ${connected && ready > 0 ? 'btn-primary' : 'btn-ghost'}" ${disabled ? 'disabled' : ''} onclick="App.runBatchUpload()">
+        ${state.uploadBatchRunning ? 'Uploading…' : ready > 0 ? `Batch Upload (${ready})` : 'Batch Upload'}
+      </button>
+      ${!connected && ready > 0 ? '<p class="upload-footer-hint">Connect device to enable batch upload</p>' : ''}`;
+  },
+
+  connectUploadDevice() {
+    state.uploadDeviceConnected = true;
+    toast('GoPro connected');
+    App.renderUploadStatus();
+  },
+
+  runBatchUpload() {
+    if (!state.uploadDeviceConnected) {
+      toast('Connect GoPro first');
+      return;
+    }
+    const targets = state.uploadQueue.filter((i) => i.state === 'pending' || i.state === 'failed');
+    if (!targets.length) {
+      toast('Nothing to upload');
+      return;
+    }
+    state.uploadBatchRunning = true;
+    targets.forEach((i) => {
+      i.state = 'uploading';
+      i.progress = 0;
+    });
+    App.renderUploadStatus();
+
+    let remaining = targets.length;
+    targets.forEach((item) => {
+      const tick = setInterval(() => {
+        item.progress = Math.min(100, item.progress + 14 + Math.floor(Math.random() * 10));
+        if (item.progress >= 100) {
+          clearInterval(tick);
+          item.state = 'uploaded';
+          item.progress = 100;
+          item.retry_count = 0;
+          remaining -= 1;
+          if (remaining === 0) {
+            state.uploadBatchRunning = false;
+            toast(`${targets.length} task(s) uploaded`);
+          }
+        }
+        if (state.screen === 'upload-status') App.renderUploadStatus();
+      }, 280);
+    });
+  },
+
   openDailySummary() {
     App.go('daily-summary');
   },
@@ -3319,6 +3441,15 @@ function bootApp() {
     App.showLoginScreen();
     App.initLoginForm();
     App.go('map');
+    return;
+  }
+  if (bootParams.get('demo') === 'tasks' || bootParams.get('demo') === 'upload') {
+    if (!state.settings.simulateFailedChecks) applyReadyChecks();
+    state.onboardingComplete = true;
+    state.auth = { region: 'US', userId: 'US-156', displayName: 'User Wang' };
+    App.showLoginScreen();
+    App.initLoginForm();
+    App.go(bootParams.get('demo') === 'upload' ? 'upload-status' : 'tasks');
     return;
   }
   if (bootParams.get('demo') === 'recording') {
