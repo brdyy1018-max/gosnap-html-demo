@@ -100,7 +100,7 @@ const DEVICE_CHECKS = [
 ];
 
 const GOPRO_DEVICES = ['GoPro-1', 'GoPro-2', 'GoPro-3'];
-const GOPRO_MAX_SELECTION = 2;
+const GOPRO_MAX_SELECTION = 1;
 const PRECHECK_STEPS = ['device'];
 const PRECHECK_FOOTER = {
   device: { show: true, primary: 'Next', action: 'deviceNext' },
@@ -272,9 +272,33 @@ const state = {
   selectedRecordId: null,
   selectedTaskId: null,
   dismissedRecordIds: [],
-  mapMode: 'idle', // idle | navigating | recording | completing | review
+  mapMode: 'idle', // idle | overview | navigating | enroute | recording | completing | review
+  transitPts: null,
+  transitDistanceM: 0,
+  transitLayers: null,
+  enrouteArrived: false,
+  autoFinishing: false,
+  enrouteStartedBackground: false,
+  mapCameraMode: 'follow-north',
+  routeOverviewHold: false,
+  mapBearing: 0,
+  mapFreeBrowse: false,
+  navFollow: false,
+  navDistanceM: 0,
+  navSimTimer: null,
+  navSimGen: 0,
+  navRecenterTimer: null,
+  mapGestureSuppress: 0,
+  navGesturesBound: false,
+  userPos: null,
+  userHeadingTrusted: null,
+  userSpeed: 0,
+  userMarker: null,
+  routeArrowMarkers: [],
+  routeSplitLines: [],
   recSeconds: 0,
   recInterval: null,
+  cardRecording: false,
   backgroundRecording: false,
   backgroundRecSeconds: 0,
   backgroundRecInterval: null,
@@ -283,6 +307,7 @@ const state = {
   shiftDistanceKm: 0,
   shiftDemoTimers: [],
   shiftStartPending: false,
+  recordAfterPrecondition: false,
   shiftDragSuppressClick: false,
   activeRouteLayer: null,
   recordingAlertType: null,
@@ -319,6 +344,14 @@ const state = {
   onboardingComplete: false,
   uploadDeviceConnected: false,
   uploadBatchRunning: false,
+  uploadPaused: false,
+  uploadConnecting: false,
+  uploadActiveTitle: null,
+  uploadDoneCount: 0,
+  uploadTotalCount: 0,
+  uploadQueueIndex: 0,
+  uploadQueueTargets: null,
+  uploadTick: null,
   uploadQueue: [
     { collect_id: 'c_upload_101', task_id: 'task_upload_101', title: 'S Vermont Ave', size: '42.1M', state: 'pending', progress: 0, retry_count: 0 },
     { collect_id: 'c_pending_103', task_id: 'task_pending_103', title: 'Wilshire Blvd', size: '38.5M', state: 'pending', progress: 0, retry_count: 1 },
@@ -367,6 +400,7 @@ const state = {
       audit_stage: 'completed',
       thumb: 'pool',
       upload_status: 'uploaded',
+      upload_progress: 100,
     },
     {
       task_id: 'street_3827948374',
@@ -383,9 +417,10 @@ const state = {
       size: '30.5M',
       distance_km: 7.6,
       status: 'pending',
-      audit_stage: 'reviewing',
+      audit_stage: 'submitted',
       thumb: 'palm',
-      upload_status: 'uploading',
+      upload_status: 'pending',
+      upload_progress: 0,
     },
     {
       task_id: 'street_2894785643',
@@ -405,9 +440,53 @@ const state = {
       audit_stage: 'completed',
       thumb: 'street',
       upload_status: 'uploaded',
+      upload_progress: 100,
+    },
+    {
+      task_id: 'street_5748392011',
+      title: 'Street 5748392011',
+      mapping_title: 'Street 5748392011',
+      ticket_id: '490511883-452',
+      address: '3600 Crenshaw Blvd, Los Angeles, CA 90016, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setHours(15, 40, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '15m22s',
+      size: '28.4M',
+      distance_km: 5.8,
+      status: 'pending',
+      audit_stage: 'submitted',
+      thumb: 'street',
+      upload_status: 'failed',
+      upload_progress: 37,
+      upload_retry_count: 1,
+    },
+    {
+      task_id: 'street_6612048831',
+      title: 'Street 6612048831',
+      mapping_title: 'Street 6612048831',
+      ticket_id: '490509441-439',
+      address: '2200 Figueroa St, Los Angeles, CA 90007, United States',
+      shot_at: (() => {
+        const d = new Date();
+        d.setHours(16, 5, 0, 0);
+        return d.toISOString();
+      })(),
+      duration: '9m48s',
+      size: '16.2M',
+      distance_km: 3.9,
+      status: 'pending',
+      audit_stage: 'submitted',
+      thumb: 'coast',
+      upload_status: 'paused',
+      upload_progress: 62,
+      upload_retry_count: 0,
     },
     {
       task_id: 'task_vermont_yesterday',
+      title: 'S Vermont Ave Mapping',
       mapping_title: 'S Vermont Ave Mapping',
       ticket_id: '490501122-441',
       address: '1200 S Vermont Ave, Los Angeles, CA 90006, United States',
@@ -421,9 +500,10 @@ const state = {
       size: '50.2M',
       distance_km: 5.1,
       status: 'pending',
-      audit_stage: 'reviewing',
+      audit_stage: 'submitted',
       thumb: 'pool',
-      upload_status: 'uploading',
+      upload_status: 'pending',
+      upload_progress: 0,
     },
   ],
   progressTasks: [
@@ -605,10 +685,20 @@ function getTaskEndMarkerHtml(t) {
   return '<div class="map-end-circle"></div>';
 }
 
+function clearTransitLayers() {
+  (state.transitLayers || []).forEach((layer) => {
+    if (layer) layer.remove();
+  });
+  state.transitLayers = null;
+}
+
 function clearMapTaskLayers() {
   if (!state.map) return;
+  clearRouteDecorations();
+  clearTransitLayers();
   Object.values(state.mapTaskLayers).forEach((layers) => {
     layers.line.remove();
+    if (layers.done) layers.done.remove();
     layers.start.remove();
     layers.end.remove();
   });
@@ -643,31 +733,54 @@ async function fetchRoadRoute(start, end) {
   return data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
 }
 
+function requestRoad(start, end) {
+  const key = routeCacheKey(start, end);
+  if (state.routeCache[key] && state.routeCache[key].length > 2) {
+    return Promise.resolve(state.routeCache[key]);
+  }
+  if (!state.routePromises) state.routePromises = {};
+  if (state.routePromises[key]) return state.routePromises[key];
+  state.routePending.add(key);
+  const promise = fetchRoadRoute(start, end)
+    .catch(() => fetchRoadRoute(start, end))
+    .then((points) => {
+      const pts = normPts(points);
+      if (pts.length > 2) state.routeCache[key] = pts;
+      return state.routeCache[key] || pts;
+    })
+    .finally(() => {
+      state.routePending.delete(key);
+      if (state.routePromises) delete state.routePromises[key];
+    });
+  state.routePromises[key] = promise;
+  return promise;
+}
+
 function ensureTaskRoutes(tasks, onUpdate) {
   tasks.forEach((t) => {
+    if (t._routeLocked) return;
     const { start, end } = getTaskEndpoints(t);
     const key = routeCacheKey(start, end);
 
-    if (state.routeCache[key]) {
+    if (state.routeCache[key] && state.routeCache[key].length > 2) {
       t.routedPolyline = state.routeCache[key];
+      t._maneuverKey = null;
       return;
     }
-    if (state.routePending.has(key)) return;
 
-    state.routePending.add(key);
-    fetchRoadRoute(start, end)
+    requestRoad(start, end)
       .then((points) => {
-        state.routeCache[key] = points;
+        if (!points || points.length < 3) return;
         tasks.forEach((task) => {
+          if (task._routeLocked) return;
           const ep = getTaskEndpoints(task);
-          if (routeCacheKey(ep.start, ep.end) === key) task.routedPolyline = points;
+          if (routeCacheKey(ep.start, ep.end) !== key) return;
+          task.routedPolyline = points;
+          task._maneuverKey = null;
         });
         onUpdate?.();
       })
-      .catch(() => {})
-      .finally(() => {
-        state.routePending.delete(key);
-      });
+      .catch(() => {});
   });
 }
 
@@ -749,8 +862,9 @@ function formatTime(sec) {
 function formatDistanceKm(km) {
   if (!km) return '0 km';
   if (km >= 100) return `${Math.round(km)} km`;
-  if (km >= 10) return `${(Math.round(km * 10) / 10).toFixed(1)} km`;
-  return `${km.toFixed(1)} km`;
+  const rounded = Math.round(km * 10) / 10;
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${text} km`;
 }
 
 function getMapTaskDistanceByPoi(poiName) {
@@ -767,7 +881,7 @@ function getMapStatsContext(screen) {
     const distanceKm = visible.reduce((sum, pt) => sum + getMapTaskDistanceByPoi(pt.poi_name), 0);
     return { distanceKm, compactTop: false, mode: 'off' };
   }
-  const taskActive = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+  const taskActive = ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
   if (state.shiftPaused) {
     return {
       distanceKm: state.shiftDistanceKm || 0,
@@ -782,7 +896,7 @@ function getMapStatsContext(screen) {
       mode: taskActive ? 'task' : 'shift',
     };
   }
-  return { distanceKm: 0, compactTop: false, mode: 'off' };
+  return { distanceKm: state.shiftDistanceKm || 0, compactTop: false, mode: 'off' };
 }
 
 function updateMapStatsWidgets() {
@@ -857,8 +971,7 @@ function stopBackgroundRecording() {
 function beginShiftRecording() {
   if (state.shiftActive) return;
   state.shiftActive = true;
-  state.shiftDistanceKm = 0;
-  state.backgroundRecSeconds = 0;
+  if (!state.backgroundRecSeconds) state.backgroundRecSeconds = 0;
   startBackgroundRecording();
 }
 
@@ -871,10 +984,9 @@ function startShift() {
 function stopShift() {
   state.shiftActive = false;
   state.shiftPaused = false;
-  state.shiftDistanceKm = 0;
-  state.backgroundRecSeconds = 0;
   clearShiftDemo();
   stopBackgroundRecording();
+  updateMapStatsWidgets();
 }
 
 function pauseShift() {
@@ -922,6 +1034,9 @@ function pauseRecordingForAlert() {
     state.recInterval = null;
   }
   state.recordingPausedByAlert = true;
+  state.userSpeed = 0;
+  clearTimeout(state.navRecenterTimer);
+  updateRecenterButton();
 }
 
 function resumeRecordingAfterAlert() {
@@ -961,76 +1076,10 @@ function bootDemoRecording(alertType) {
   }, 250);
 }
 
-function canDragShiftToStop() {
-  return state.shiftActive || state.shiftPaused;
-}
-
-const SHIFT_DRAG_MORPH_THRESHOLD = 22;
-const SHIFT_DRAG_END_THRESHOLD = 56;
-let shiftDragState = null;
-
 function bindShiftControls() {
   const btn = document.getElementById('map-shift-btn');
-  const wrap = document.getElementById('map-shift-drag');
-  const actionEl = btn?.querySelector('[data-shift-action]');
-  if (!btn || !wrap || btn.dataset.shiftBound === '1') return;
+  if (!btn || btn.dataset.shiftBound === '1') return;
   btn.dataset.shiftBound = '1';
-
-  const resetShiftDrag = (commit) => {
-    if (!shiftDragState) return;
-    const moved = shiftDragState.moved;
-    shiftDragState = null;
-    btn.style.transform = '';
-    btn.classList.remove('is-dragging', 'is-drag-stop', 'is-drop-ready');
-    wrap.classList.remove('is-dragging');
-    updateMapStatsWidgets();
-    if (commit) {
-      state.shiftDragSuppressClick = true;
-      App.endShift();
-      return;
-    }
-    if (moved) state.shiftDragSuppressClick = true;
-  };
-
-  btn.addEventListener('pointerdown', (e) => {
-    if (!canDragShiftToStop()) return;
-    if (e.button !== undefined && e.button !== 0) return;
-    shiftDragState = {
-      startY: e.clientY,
-      offsetY: 0,
-      moved: false,
-      pointerId: e.pointerId,
-    };
-    btn.setPointerCapture(e.pointerId);
-  });
-
-  btn.addEventListener('pointermove', (e) => {
-    if (!shiftDragState || e.pointerId !== shiftDragState.pointerId) return;
-    const offsetY = Math.max(0, Math.min(68, e.clientY - shiftDragState.startY));
-    if (offsetY > 6) shiftDragState.moved = true;
-    shiftDragState.offsetY = offsetY;
-    const morphStop = offsetY >= SHIFT_DRAG_MORPH_THRESHOLD;
-    const dropReady = offsetY >= SHIFT_DRAG_END_THRESHOLD;
-
-    btn.classList.toggle('is-dragging', offsetY > 6);
-    btn.classList.toggle('is-drag-stop', morphStop);
-    btn.classList.toggle('is-drop-ready', dropReady);
-    wrap.classList.toggle('is-dragging', offsetY > 6);
-    btn.style.transform = `translateY(${offsetY}px)`;
-
-    if (actionEl && morphStop) actionEl.textContent = 'Stop';
-    else if (actionEl) updateMapStatsWidgets();
-  });
-
-  const finishDrag = (e) => {
-    if (!shiftDragState || e.pointerId !== shiftDragState.pointerId) return;
-    const commit = shiftDragState.offsetY >= SHIFT_DRAG_END_THRESHOLD;
-    if (btn.hasPointerCapture(e.pointerId)) btn.releasePointerCapture(e.pointerId);
-    resetShiftDrag(commit);
-  };
-
-  btn.addEventListener('pointerup', finishDrag);
-  btn.addEventListener('pointercancel', finishDrag);
 }
 
 function enterMapScreen() {
@@ -1040,6 +1089,11 @@ function enterMapScreen() {
   syncMapTaskSheet();
   updateBackgroundRecordingBar();
   updateMapStatsWidgets();
+  if (state.mapMode === 'recording' && state.navFollow && !state.mapFreeBrowse) followCamera(false);
+  if (state.mapMode === 'overview') {
+    const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    if (task) requestAnimationFrame(() => fitTaskWithNeighbors(task));
+  }
 }
 
 function clearShiftDemo() {
@@ -1065,38 +1119,27 @@ function resetShiftDemoTask(taskId = SHIFT_DEMO_TASK_ID) {
 
 function runShiftDemo() {
   clearShiftDemo();
-  const taskId = SHIFT_DEMO_TASK_ID;
-  resetShiftDemoTask(taskId);
-  state.selectedTaskId = null;
-  state.mapMode = 'idle';
+  if (!state.userPos) {
+    const seed = listNearbyOpenTasks(null)[0];
+    const start = seed ? getTaskEndpoints(seed.task).start : null;
+    if (start) state.userPos = { lat: start.lat - 0.0022, lng: start.lng };
+  }
+  const nearby = listNearbyOpenTasks(state.userPos);
+  state.selectedTaskId = nearby[0]?.task.task_id || null;
+  state.mapMode = 'next';
+  state.continuousCollect = true;
   state.recSeconds = 0;
   clearInterval(state.recInterval);
+  state.recInterval = null;
+  state.transitPts = null;
+  state.enrouteArrived = false;
+  state.navFollow = false;
+  state.navDistanceM = 0;
   if (state.screen !== 'map') App.go('map');
+  App.renderPushedTaskCard(null);
+  App.renderNextTaskDeck();
   App.renderMapTasks();
-  App.renderTaskSheet();
   App.updateMapChrome();
-
-  scheduleShiftDemo(() => {
-    if (!state.shiftActive) return;
-    toast('Driving to nearest task…');
-  }, SHIFT_DEMO_STEP_MS);
-
-  scheduleShiftDemo(() => {
-    if (!state.shiftActive) return;
-    const t = state.mapTasks.find((x) => x.task_id === taskId);
-    if (!t) return;
-    t.distance_from_user_km = 0.2;
-    state.selectedTaskId = taskId;
-    App.renderMapTasks({ skipFit: true });
-    App.renderTaskSheet();
-    App.updateMapChrome();
-    toastSuccess('Location verified — task nearby');
-  }, SHIFT_DEMO_STEP_MS * 2);
-
-  scheduleShiftDemo(() => {
-    if (!state.shiftActive) return;
-    App.runShiftDemoTaskFlow(taskId);
-  }, SHIFT_DEMO_STEP_MS * 3);
 }
 
 function toast(msg) {
@@ -1295,13 +1338,62 @@ function getRecordStatusTone(status) {
 }
 
 function getRecordUploadStatus(r) {
-  return r.upload_status === 'uploading' ? 'uploading' : 'uploaded';
+  const s = r.upload_status;
+  if (s === 'pending' || s === 'uploading' || s === 'paused' || s === 'failed' || s === 'uploaded') {
+    return s;
+  }
+  return 'uploaded';
 }
+
+function isRecordUploadIncomplete(r) {
+  const s = getRecordUploadStatus(r);
+  return s === 'pending' || s === 'uploading' || s === 'paused' || s === 'failed';
+}
+
+function getUploadProgress(r) {
+  const p = Number(r.upload_progress);
+  if (Number.isFinite(p)) return Math.max(0, Math.min(100, Math.round(p)));
+  return getRecordUploadStatus(r) === 'uploaded' ? 100 : 0;
+}
+
+function getIncompleteUploadRecords() {
+  return state.records.filter((r) => isRecordUploadIncomplete(r));
+}
+
+function syncUploadQueueFromRecords() {
+  state.uploadQueue = state.records
+    .filter((r) => getRecordUploadStatus(r) !== 'uploaded' || r._keepInUploadQueue)
+    .map((r) => ({
+      collect_id: r.task_id,
+      task_id: r.task_id,
+      title: r.title || r.mapping_title || r.task_id,
+      size: r.size || '—',
+      state: getRecordUploadStatus(r),
+      progress: getUploadProgress(r),
+      retry_count: r.upload_retry_count || 0,
+    }));
+}
+
+const TASK_COPY_ID_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+const TASK_RETRY_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 12a8 8 0 10-2.3 5.7" stroke-linecap="round"/><path d="M20 12v-5h-5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const TASK_RESUME_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6.5v11l9-5.5-9-5.5Z" stroke-linejoin="round"/></svg>';
 
 function renderTaskUploadStatusBadge(r) {
   const status = getRecordUploadStatus(r);
   if (status === 'uploading') {
     return `<span class="task-upload-status task-upload-status--uploading"><span class="task-upload-spinner" aria-hidden="true"></span>Uploading</span>`;
+  }
+  if (status === 'pending') {
+    return `<span class="task-upload-status task-upload-status--pending">Waiting</span>`;
+  }
+  if (status === 'paused') {
+    return `<span class="task-upload-status task-upload-status--paused">Paused</span>`;
+  }
+  if (status === 'failed') {
+    return `<span class="task-upload-status task-upload-status--failed">Failed</span>`;
   }
   return `<span class="task-upload-status task-upload-status--uploaded"><svg class="task-upload-check" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 6l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Uploaded</span>`;
 }
@@ -1440,7 +1532,7 @@ function updateBottomNav() {
   if (!nav) return;
 
   const driving =
-    state.screen === 'map' && ['navigating', 'recording', 'completing'].includes(state.mapMode);
+    state.screen === 'map' && ['navigating', 'enroute', 'recording', 'completing', 'next'].includes(state.mapMode);
   const show = BOTTOM_NAV_SCREENS.includes(state.screen) && !driving;
 
   nav.classList.toggle('hidden', !show);
@@ -1848,7 +1940,7 @@ const App = {
         App.showPrecheckStep('failed');
         return;
       }
-      state.precheckDiscoveredDevices = ['GoPro-1', 'GoPro-2'];
+      state.precheckDiscoveredDevices = ['GoPro-1'];
       state.precheckSetupPhase = 'ready';
       App.renderPrecheckDeviceUI();
     }, delay);
@@ -1968,7 +2060,7 @@ const App = {
       if (selected.length >= GOPRO_MAX_SELECTION) {
         const input = document.querySelector(`input[name="gopro"][value="${value}"]`);
         if (input) input.checked = false;
-        toast(`You can connect up to ${GOPRO_MAX_SELECTION} devices`);
+        toast('Only one device can be connected');
         return;
       }
       selected.push(value);
@@ -1998,8 +2090,8 @@ const App = {
       toast('Wait for nearby devices to appear');
       return;
     }
-    if (state.selectedGopros.length < GOPRO_MAX_SELECTION) {
-      toast(`Connect ${GOPRO_MAX_SELECTION} devices to continue`);
+    if (!state.selectedGopros.length) {
+      toast('Connect one device to continue');
       return;
     }
     state.deviceChecks.bluetooth = true;
@@ -2012,7 +2104,11 @@ const App = {
     state.preconditionGps = { authorized: true, distanceOk: true };
     state.preconditions = { bluetooth: true, network: true, gps: true, storage: true };
     state.onboardingComplete = true;
-    toastSuccess(`Connected to ${state.selectedGopros.join(' & ')}`);
+    state.selectedTaskId = null;
+    state.mapMode = 'idle';
+    if (typeof stopNavSimulation === 'function') stopNavSimulation();
+    if (typeof clearShiftDemo === 'function') clearShiftDemo();
+    toastSuccess(`Connected to ${state.selectedGopros[0]}`);
     App.go('map');
   },
 
@@ -2173,6 +2269,7 @@ const App = {
     if (id === 'modal-precondition') {
       state.preconditionFixReturn = false;
       state.shiftStartPending = false;
+      state.recordAfterPrecondition = false;
     }
   },
 
@@ -2198,22 +2295,29 @@ const App = {
     const sheet = document.getElementById('task-sheet');
     const mapRail = document.getElementById('map-rail');
 
-    const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+    const driving = ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
+    const overview = state.mapMode === 'overview';
 
-    topChrome.classList.toggle('hidden', driving);
-    nav.classList.toggle('hidden', !driving);
+    topChrome.classList.remove('hidden');
+    nav.classList.toggle('hidden', state.mapMode !== 'recording' && state.mapMode !== 'enroute');
     captureSheet.classList.toggle('hidden', !driving);
     mapFloats.classList.toggle('hidden', !driving);
 
-    const hideSheet = driving || !state.selectedTaskId;
+    const pickingNext = state.mapMode === 'next' || state.mapMode === 'claim';
+    const hideSheet = (driving || !state.selectedTaskId) && !pickingNext;
     sheet.classList.toggle('hidden', hideSheet);
 
-    mapRail.classList.toggle('hidden', driving);
+    mapRail.classList.remove('hidden');
+    const filterBtn = document.getElementById('map-filter-btn');
+    if (filterBtn) filterBtn.classList.toggle('hidden', driving || overview);
 
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
     if (t && driving) {
       document.getElementById('capture-title').textContent = t.poi_name;
     }
+
+    document.getElementById('capture-enroute')?.classList.toggle('hidden', state.mapMode !== 'enroute');
+    document.querySelector('.capture-submit-row')?.classList.toggle('hidden', state.mapMode === 'enroute');
 
     if (driving) {
       renderCaptureControls();
@@ -2222,19 +2326,17 @@ const App = {
       document.getElementById('capture-dot').classList.toggle('hidden', state.mapMode === 'navigating' && !state.recSeconds);
     }
 
-    const showMemoryAlert =
-      state.mapMode === 'recording' &&
-      state.recSeconds >= 15 &&
-      !state.recordingAlertDismissed.storage_full &&
-      !state.recordingAlertType;
-    if (showMemoryAlert) App.showRecordingAlert('storage_full');
-
     const alertModal = document.getElementById('modal-recording-alert');
+    if (state.recordingAlertType === 'storage_full') {
+      state.recordingAlertType = null;
+      alertModal?.classList.remove('show');
+      document.getElementById('modal-ios-storage')?.classList.remove('show');
+      document.getElementById('modal-storage')?.classList.remove('show');
+    }
     if (alertModal && !state.recordingAlertType) alertModal.classList.remove('show');
 
     const showRest = state.mapMode === 'recording' && state.recSeconds >= 995;
     document.getElementById('map-float-rest').classList.toggle('hidden', !showRest);
-    document.getElementById('map-float-over').classList.toggle('hidden', showRest);
 
     const deviceBattBolt = document.getElementById('device-batt-bolt');
 
@@ -2283,10 +2385,14 @@ const App = {
 
     statusBar.classList.toggle('is-collapsed', state.statusBarCollapsed);
 
-    if (driving) App.renderMapTasks({ skipFit: true });
     updateMapStatsWidgets();
     updateBackgroundRecordingBar();
     updateBottomNav();
+    updateNavBanner();
+    updateOrientButton();
+    updateRecenterButton();
+    document.getElementById('screen-map')?.classList.toggle('is-recording', state.mapMode === 'recording');
+    document.getElementById('screen-map')?.classList.toggle('is-enroute', state.mapMode === 'enroute');
   },
 
   tickRec() {
@@ -2298,12 +2404,21 @@ const App = {
   },
 
   initMap() {
-    state.map = L.map('map', { zoomControl: false }).setView([34.06, -118.32], 11);
+    state.map = L.map('map', {
+      zoomControl: false,
+      rotate: true,
+      bearing: 0,
+      rotateControl: false,
+      touchRotate: false,
+      shiftKeyRotate: false,
+    }).setView([34.06, -118.32], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
     }).addTo(state.map);
     bindShiftControls();
+    bindNavGestures();
     App.renderMapTasks();
+    updateOrientButton();
   },
 
   initProgressMap() {
@@ -2318,15 +2433,18 @@ const App = {
     if (!state.map) return;
     clearMapTaskLayers();
 
-    const visible = filterTasksByMapFilters(state.mapTasks, state.mapFilters);
-    const driving = ['navigating', 'recording', 'completing'].includes(state.mapMode);
+    const visible = filterTasksByMapFilters(state.mapTasks, state.mapFilters).filter(
+      (t) => !t.overview_only || t.task_id === state.selectedTaskId
+    );
+    const driving = ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
     const inReview = state.mapMode === 'review';
+    const overview = state.mapMode === 'overview';
     let tasksToDraw = visible;
 
-    if (driving && state.selectedTaskId) {
+    if ((driving || inReview) && state.selectedTaskId) {
       tasksToDraw = visible.filter((t) => t.task_id === state.selectedTaskId);
-    } else if (inReview && state.selectedTaskId) {
-      tasksToDraw = visible.filter((t) => t.task_id === state.selectedTaskId);
+    } else if (state.mapMode === 'next') {
+      tasksToDraw = visible.filter((t) => isClaimedTask(t));
     }
 
     ensureTaskRoutes(tasksToDraw, () => {
@@ -2337,7 +2455,66 @@ const App = {
       const latlngs = getTaskLatLngs(t);
       const endpoints = getTaskEndpoints(t);
       const isSelected = t.task_id === state.selectedTaskId;
-      const line = L.polyline(latlngs, getTaskLineStyle(t, isSelected)).addTo(state.map);
+      const navigatingFocus = isSelected && (state.mapMode === 'recording' || state.mapMode === 'completing' || state.mapMode === 'enroute' || state.mapMode === 'navigating');
+      let line;
+      let done = null;
+      if (navigatingFocus && state.mapMode === 'enroute') {
+        line = L.polyline(latlngs, {
+          color: '#c5ccd4',
+          weight: 6,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(state.map);
+        state.routeSplitLines = [null, line];
+        const transit = normPts(state.transitPts);
+        if (transit.length > 1) {
+          const split = splitRouteLatLngs(transit, state.transitDistanceM || 0);
+          let doneLine = null;
+          if (split.done.length > 1) {
+            doneLine = L.polyline(split.done, {
+              color: '#93c5fd',
+              weight: 6,
+              opacity: 0.9,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }).addTo(state.map);
+          }
+          const pendingLine = L.polyline(split.pending.length > 1 ? split.pending : transit, {
+            color: '#1a73e8',
+            weight: 7,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(state.map);
+          state.transitLayers = [doneLine, pendingLine];
+          drawRouteArrows(split.pending.length > 1 ? split.pending : transit);
+        }
+      } else if (navigatingFocus) {
+        const along = state.mapMode === 'recording' || state.mapMode === 'completing' ? state.navDistanceM || 0 : 0;
+        const split = splitRouteLatLngs(latlngs, along);
+        if (split.done.length > 1) {
+          done = L.polyline(split.done, {
+            color: '#94a3b8',
+            weight: 7,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(state.map);
+        }
+        line = L.polyline(split.pending.length > 1 ? split.pending : latlngs, {
+          color: '#9aa3ad',
+          weight: 8,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(state.map);
+        state.routeSplitLines = [done, line];
+        drawRouteArrows(split.pending.length > 1 ? split.pending : latlngs);
+        state._arrowAt = along;
+      } else {
+        line = L.polyline(latlngs, getTaskLineStyle(t, isSelected)).addTo(state.map);
+      }
       line.on('click', () => App.selectTask(t.task_id));
 
       const startMarker = L.marker([endpoints.start.lat, endpoints.start.lng], {
@@ -2360,19 +2537,22 @@ const App = {
         interactive: false,
       }).addTo(state.map);
 
-      state.mapTaskLayers[t.task_id] = { line, start: startMarker, end: endMarker };
+      state.mapTaskLayers[t.task_id] = { line, done, start: startMarker, end: endMarker };
     });
 
     const selected = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
 
-    if (!options.skipFit) {
-      if (selected) {
+    if (!options.skipFit && state.mapMode !== 'recording' && state.mapMode !== 'completing' && state.mapMode !== 'enroute') {
+      if (selected && (overview || state.mapMode === 'next' || state.mapMode === 'claim' || state.mapMode === 'idle')) {
+        fitTaskWithNeighbors(selected);
+      } else if (selected) {
         state.map.fitBounds(L.latLngBounds(getTaskLatLngs(selected)), { padding: [60, 40], animate: true });
       } else if (tasksToDraw.length) {
         const bounds = L.latLngBounds(tasksToDraw.flatMap((t) => getTaskLatLngs(t)));
         state.map.fitBounds(bounds, { padding: [40, 40], animate: true });
       }
     }
+    updateUserMarker();
   },
 
   renderProgressMap(options = {}) {
@@ -2408,9 +2588,35 @@ const App = {
   },
 
   selectTask(taskId) {
-    if (['navigating', 'recording', 'completing'].includes(state.mapMode)) return;
+    if (['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode)) return;
+    const task = state.mapTasks.find((x) => x.task_id === taskId);
+    if (!task) return;
     resetBeginCaptureState();
+    const unclaimed = isUnclaimedTask(task);
+    if (state.mapMode === 'next') {
+      if (!isClaimedTask(task)) return;
+      state.selectedTaskId = taskId;
+      App.markNextDeckCard(taskId);
+      App.renderMapTasks();
+      App.updateMapChrome();
+      return;
+    }
+    if (state.mapMode === 'claim' && unclaimed) {
+      state.selectedTaskId = taskId;
+      App.markNextDeckCard(taskId);
+      App.renderMapTasks();
+      App.updateMapChrome();
+      return;
+    }
     state.selectedTaskId = taskId;
+    if (unclaimed) {
+      state.mapMode = 'claim';
+      App.renderClaimDeck();
+      App.renderMapTasks();
+      App.updateMapChrome();
+      return;
+    }
+    if (state.mapMode === 'claim' || state.mapMode === 'next') state.mapMode = 'idle';
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2419,7 +2625,9 @@ const App = {
   closeTaskSheet() {
     state.selectedTaskId = null;
     resetBeginCaptureState();
-    if (state.mapMode === 'review') state.mapMode = 'idle';
+    if (state.mapMode === 'review' || state.mapMode === 'claim') state.mapMode = 'idle';
+    const sheet = document.getElementById('task-sheet');
+    sheet?.classList.remove('is-next-deck', 'is-recommend');
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2434,6 +2642,14 @@ const App = {
   },
 
   renderTaskSheet() {
+    if (state.mapMode === 'next') {
+      App.renderNextTaskDeck();
+      return;
+    }
+    if (state.mapMode === 'claim') {
+      App.renderClaimDeck();
+      return;
+    }
     const sheet = document.getElementById('task-sheet');
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
     if (!t) {
@@ -2442,7 +2658,6 @@ const App = {
     }
     sheet.classList.remove('hidden');
 
-    const claimed = t.display_state === 'claimed' && t.claimed_by_me;
     const completed = t.display_state === 'completed_local';
     const inReview = state.mapMode === 'review' || completed;
     const tags = renderTaskBadges(t);
@@ -2450,27 +2665,14 @@ const App = {
     const title = getTaskSheetTitle(t);
 
     let actions = '';
-    let actionClass = 'task-sheet-actions';
+    const actionClass = 'task-sheet-actions';
     if (inReview) {
       const status = t.review_status || 'awaiting';
       const cls =
         status === 'rejected' ? 'is-failed' : status === 'approved' ? 'is-success' : '';
       actions = `<button type="button" class="btn btn-submitted task-sheet-accept ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
-    } else if (claimed) {
-      actionClass += ' split';
-      const beginLoading = state.beginButtonLoading;
-      const beginBtnClass = `task-sheet-begin${beginLoading ? ' is-loading' : ''}`;
-      const beginBtnAttrs = beginLoading ? ' disabled aria-busy="true"' : '';
-      const beginBtnContent = beginLoading
-        ? '<span class="task-sheet-begin-spinner" aria-hidden="true"></span>Begin'
-        : 'Begin';
-      actions = `<button type="button" class="task-release-btn" onclick="App.releaseTask('${t.task_id}')">
-        ${TASK_SHEET_RELEASE_ICON}
-        <span>Release</span>
-      </button>
-      <button type="button" class="${beginBtnClass}"${beginBtnAttrs} onclick="App.openBegin()">${beginBtnContent}</button>`;
     } else {
-      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
+      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.startOverviewRecording()">Start recording</button>`;
     }
 
     sheet.innerHTML = `
@@ -2502,17 +2704,33 @@ const App = {
 
   acceptTask(id) {
     const t = state.mapTasks.find((x) => x.task_id === id);
-    if (t) {
-      t.display_state = 'claimed';
-      t.claimed_by_me = true;
-      App.renderMapTasks();
-      App.renderTaskSheet();
-      toast('Task accepted');
+    if (!t || !isUnclaimedTask(t)) return;
+    t.display_state = 'claimed';
+    t.claimed_by_me = true;
+    if (state.mapMode === 'claim') {
+      const rest = listNearbyUnclaimedTasks(state.userPos);
+      if (!rest.length) {
+        state.mapMode = 'idle';
+        state.selectedTaskId = null;
+        document.getElementById('task-sheet')?.classList.remove('is-next-deck');
+      } else if (!rest.some((item) => item.task.task_id === state.selectedTaskId)) {
+        state.selectedTaskId = rest[0].task.task_id;
+      }
     }
+    App.renderMapTasks();
+    App.renderTaskSheet();
+    App.updateMapChrome();
+    toast('Task accepted');
   },
 
   openBegin() {
     if (state.beginButtonLoading) return;
+    syncPreconditionsFromDevice();
+    if (allPreconditionsOk() && !state.settings.simulateFailedChecks) {
+      state.beginPreconditionPassed = true;
+      App.tryBeginCapture();
+      return;
+    }
     if (!state.beginPreconditionPassed) {
       if (state.skipSafety) {
         App.openPrecondition();
@@ -2551,6 +2769,12 @@ const App = {
   confirmSafety() {
     if (document.getElementById('skip-safety').checked) state.skipSafety = true;
     App.closeModal('modal-safety');
+    syncPreconditionsFromDevice();
+    if (allPreconditionsOk() && !state.settings.simulateFailedChecks) {
+      state.beginPreconditionPassed = true;
+      App.tryBeginCapture();
+      return;
+    }
     App.openPrecondition();
   },
 
@@ -2561,6 +2785,10 @@ const App = {
       syncPreconditionsForShift();
     } else {
       syncPreconditionsFromDevice();
+    }
+    if (allPreconditionsOk() && !state.settings.simulateFailedChecks) {
+      App.preconditionGo();
+      return;
     }
     App.renderPrecondition();
     App.updateMapChrome();
@@ -2603,6 +2831,8 @@ const App = {
   preconditionGo() {
     if (!allPreconditionsOk()) return;
     const startingShift = state.shiftStartPending;
+    const recordAfter = state.recordAfterPrecondition;
+    state.recordAfterPrecondition = false;
     state.preconditionFixReturn = false;
     App.closeModal('modal-precondition');
     if (startingShift) {
@@ -2612,6 +2842,10 @@ const App = {
     state.beginPreconditionPassed = true;
     state.beginProximityRetried = false;
     state.beginButtonLoading = false;
+    if (recordAfter) {
+      App.startOverviewRecording();
+      return;
+    }
     App.renderMapTasks({ skipFit: true });
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2623,14 +2857,70 @@ const App = {
     if (!state.recSeconds) state.recSeconds = 0;
     clearInterval(state.recInterval);
     state.recInterval = setInterval(App.tickRec, 1000);
+    beginNavSimulation();
     App.updateMapChrome();
+    followCamera(true);
     toast('Task recording started');
+  },
+
+  startPushedRecording(force) {
+    if (state.mapMode !== 'enroute' || state.cardRecording) return;
+    const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    const start = task ? normPts(getTaskLatLngs(task))[0] : null;
+    const dist = start && state.userPos ? haversineM(state.userPos, start) : Infinity;
+    if (!force && dist > 50) return;
+    state.cardRecording = true;
+    state.recSeconds = 0;
+    clearInterval(state.recInterval);
+    state.recInterval = setInterval(() => {
+      if (!state.cardRecording || state.mapMode !== 'enroute') return;
+      state.recSeconds += 1;
+      App.syncCardRecordButton();
+    }, 1000);
+    App.syncCardRecordButton();
+  },
+
+  toggleCardRecording() {
+    if (state.mapMode !== 'enroute' || state.cardRecording) return;
+    App.startPushedRecording(true);
+  },
+
+  syncCardRecordButton() {
+    const btn = document.querySelector('.pushed-next-record');
+    if (!btn) return;
+    btn.parentElement?.classList.toggle('is-live', !!state.cardRecording);
+    btn.disabled = !!state.cardRecording;
+    btn.setAttribute('aria-label', state.cardRecording ? 'Recording' : 'Start recording');
+    const time = btn.parentElement?.querySelector('.pushed-next-rec-time');
+    if (time) {
+      time.textContent = formatTime(state.recSeconds || 0);
+      time.classList.toggle('hidden', !state.cardRecording);
+    }
+  },
+
+  arriveTaskEnd() {
+    if (state.mapMode !== 'recording' || state.autoFinishing) return;
+    state.autoFinishing = true;
+    state.completeProximityRetried = true;
+    App.stopRecording();
+    App.completeTask();
+    state.autoFinishing = false;
+  },
+
+  submitCapture() {
+    if (state.completeButtonLoading) return;
+    if (state.mapMode === 'recording') App.stopRecording();
+    if (state.mapMode === 'completing') App.completeTask();
   },
 
   stopRecording() {
     if (state.mapMode !== 'recording') return;
     state.mapMode = 'completing';
+    state.navFollow = false;
+    state.mapFreeBrowse = false;
+    stopNavSimulation();
     clearInterval(state.recInterval);
+    App.renderMapTasks({ skipFit: true });
     App.updateMapChrome();
   },
 
@@ -2668,37 +2958,290 @@ const App = {
       status: 'pending',
       audit_stage: 'submitted',
       thumb: ['pool', 'palm', 'street'][Math.floor(Math.random() * 3)],
-      upload_status: 'uploading',
+      upload_status: 'pending',
+      upload_progress: 0,
+      upload_retry_count: 0,
     };
     state.records.unshift(newRecord);
-    setTimeout(() => {
-      const rec = state.records.find((x) => x.task_id === newRecord.task_id && x.shot_at === newRecord.shot_at);
-      if (rec) {
-        rec.upload_status = 'uploaded';
-        if (state.screen === 'tasks') App.renderTaskList();
-      }
-    }, 4000);
-    state.mapMode = 'review';
+    stopNavSimulation();
     clearInterval(state.recInterval);
     state.recSeconds = 0;
     state.completeProximityRetried = false;
     state.completeButtonLoading = false;
+    state.mapFreeBrowse = false;
+    const nearby = listNearbyOpenTasks(state.userPos || getTaskEndpoints(t).end);
+    if (nearby.length) {
+      state.selectedTaskId = nearby[0].task.task_id;
+      state.continuousCollect = true;
+      state.mapMode = 'next';
+      state.navDistanceM = 0;
+      state.recSeconds = 0;
+      clearInterval(state.recInterval);
+      state.recInterval = null;
+      state.transitPts = null;
+      state.enrouteArrived = false;
+      state.navFollow = false;
+      App.renderPushedTaskCard(null);
+      App.renderNextTaskDeck();
+      App.renderMapTasks();
+      App.updateMapChrome();
+      toast('Choose a task, then start navigation');
+      return;
+    }
+    state.continuousCollect = false;
+    state.transitPts = null;
+    state.enrouteArrived = false;
+    App.renderPushedTaskCard(null);
+    state.mapMode = 'idle';
+    state.selectedTaskId = null;
+    state.navFollow = false;
+    state.mapBearingMode = 'north';
+    state.userPos = null;
+    updateUserMarker();
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
     updateBackgroundRecordingBar();
-    toast('Task submitted');
+    toast('All tasks completed');
+  },
+
+  renderNextTaskDeck() {
+    App.renderTaskDeck(
+      'next',
+      listNearbyOpenTasks(state.userPos),
+      'App.dismissRecommendation()',
+      (task) => `App.startNextNavigation('${task.task_id}')`,
+      'Start'
+    );
+  },
+
+  renderClaimDeck() {
+    const selected = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    const anchor = state.userPos || (selected ? getTaskEndpoints(selected).start : null);
+    App.renderTaskDeck(
+      'claim',
+      listNearbyUnclaimedTasks(anchor),
+      'App.closeTaskSheet()',
+      (task) => `App.acceptTask('${task.task_id}')`,
+      'Accept'
+    );
+  },
+
+  renderTaskDeck(mode, nearby, closeHandler, actionCall, actionLabel) {
+    const sheet = document.getElementById('task-sheet');
+    if (!sheet || state.mapMode !== mode) return;
+    if (!nearby.length) {
+      sheet.classList.add('hidden');
+      sheet.classList.remove('is-next-deck', 'is-recommend');
+      return;
+    }
+    if (!nearby.some((item) => item.task.task_id === state.selectedTaskId)) {
+      state.selectedTaskId = nearby[0].task.task_id;
+    }
+    sheet.classList.remove('hidden', 'is-recommend');
+    sheet.classList.add('is-next-deck');
+    sheet.innerHTML = `<div class="next-task-scroller" id="next-task-scroller">${nearby
+      .map(({ task, distanceM }) => {
+        const km = (distanceM / 1000).toFixed(1);
+        const active = task.task_id === state.selectedTaskId ? ' is-active' : '';
+        return `<article class="task-sheet-card next-deck-card${active}" data-task-id="${task.task_id}" onclick="App.selectTask('${task.task_id}')">
+          <div class="task-sheet-head">
+            <div class="task-sheet-head-copy">
+              <h2 class="task-sheet-title">${getTaskSheetTitle(task)}</h2>
+              <p class="task-sheet-meta">${km} kilometers away from you | ${task.poi_address || ''}</p>
+            </div>
+            ${renderTaskCardCloseBtn(`event.stopPropagation(); ${closeHandler}`)}
+          </div>
+          ${renderTaskBadges(task)}
+          ${renderTaskSheetLinks(task)}
+          <div class="task-sheet-actions">
+            <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${actionCall(task)}">${actionLabel}</button>
+          </div>
+        </article>`;
+      })
+      .join('')}</div>`;
+    const scroller = document.getElementById('next-task-scroller');
+    if (scroller) {
+      scroller.addEventListener(
+        'scroll',
+        () => {
+          clearTimeout(state.nextDeckTimer);
+          state.nextDeckTimer = setTimeout(() => App.onNextDeckScroll(), 90);
+        },
+        { passive: true }
+      );
+    }
+    App.markNextDeckCard(state.selectedTaskId, true);
+  },
+
+  markNextDeckCard(taskId, quiet) {
+    const scroller = document.getElementById('next-task-scroller');
+    if (!scroller) return;
+    scroller.querySelectorAll('.next-deck-card').forEach((card) => {
+      card.classList.toggle('is-active', card.dataset.taskId === taskId);
+    });
+    const card = scroller.querySelector(`[data-task-id="${taskId}"]`);
+    if (!card) return;
+    state.nextDeckQuiet = true;
+    card.scrollIntoView({ inline: 'center', block: 'nearest', behavior: quiet ? 'auto' : 'smooth' });
+    clearTimeout(state.nextDeckQuietTimer);
+    state.nextDeckQuietTimer = setTimeout(() => {
+      state.nextDeckQuiet = false;
+    }, 400);
+  },
+
+  onNextDeckScroll() {
+    if (!['next', 'claim'].includes(state.mapMode) || state.nextDeckQuiet) return;
+    const scroller = document.getElementById('next-task-scroller');
+    if (!scroller) return;
+    const cards = [...scroller.querySelectorAll('.next-deck-card')];
+    const mid = scroller.scrollLeft + scroller.clientWidth / 2;
+    let best = null;
+    let bestDist = Infinity;
+    cards.forEach((card) => {
+      const center = card.offsetLeft + card.offsetWidth / 2;
+      const dist = Math.abs(center - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = card;
+      }
+    });
+    if (!best || best.dataset.taskId === state.selectedTaskId) return;
+    state.selectedTaskId = best.dataset.taskId;
+    cards.forEach((card) => card.classList.toggle('is-active', card === best));
+    App.renderMapTasks();
+    App.updateMapChrome();
+  },
+
+  startNextNavigation(taskId) {
+    if (state.mapMode !== 'next') return;
+    const task = state.mapTasks.find((t) => t.task_id === (taskId || state.selectedTaskId));
+    if (!task) return;
+    state.selectedTaskId = task.task_id;
+    state.mapMode = 'enroute';
+    state.navDistanceM = 0;
+    state.enrouteStartedBackground = !state.backgroundRecording;
+    startBackgroundRecording();
+    const sheet = document.getElementById('task-sheet');
+    if (sheet) {
+      sheet.classList.remove('is-next-deck', 'is-recommend');
+      sheet.classList.add('hidden');
+      sheet.innerHTML = '';
+    }
+    App.renderPushedTaskCard(task);
+    beginTransit(task);
+    App.renderMapTasks({ skipFit: true });
+    App.updateMapChrome();
+    toast('Navigation started');
+  },
+
+  renderPushedTaskCard(task) {
+    const el = document.getElementById('pushed-task-card');
+    const phone = document.getElementById('screen-map');
+    if (!el) return;
+    if (!task) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      phone?.classList.remove('has-pushed-card');
+      return;
+    }
+    el.classList.remove('hidden');
+    phone?.classList.add('has-pushed-card');
+    document.getElementById('capture-title').textContent = getTaskSheetTitle(task);
+    const mins = task.duration_minutes ?? Math.max(30, Math.round((task.distance_km || 1.4) * 22));
+    const badges = [];
+    if (task.priority === 'high') badges.push('<span class="task-tag task-tag-high">HIGH</span>');
+    if (task.dispatch_round === 'second') badges.push('<span class="task-tag task-tag-second">2ND</span>');
+    badges.push(`<span class="task-tag task-tag-duration">${mins} min</span>`);
+    el.innerHTML = `
+      <div class="task-sheet-card pushed-next-card">
+        <div class="pushed-next-rec${state.cardRecording ? ' is-live' : ''}">
+          <button type="button" class="pushed-next-record" onclick="App.toggleCardRecording()" aria-label="${state.cardRecording ? 'Recording' : 'Start recording'}"${state.cardRecording ? ' disabled' : ''}></button>
+          <span class="pushed-next-live">
+            <span class="pushed-next-breathe" aria-hidden="true"></span>
+            <span class="pushed-next-rec-time">${formatTime(state.recSeconds || 0)}</span>
+          </span>
+        </div>
+        <div class="pushed-next-main">
+        <div class="pushed-next-top">
+          <div class="task-sheet-head-copy">
+            <p class="pushed-task-kicker">Next task</p>
+            <h2 class="task-sheet-title">${getTaskSheetTitle(task)}</h2>
+            <p class="task-sheet-meta">${task.poi_address || ''}</p>
+          </div>
+          <div class="pushed-next-side">
+            ${renderTaskCardCloseBtn('App.dismissRecommendation()')}
+            <div class="pushed-next-remain">
+              <span id="enroute-status">—</span>
+              <span class="pushed-next-remain-label">to start</span>
+            </div>
+          </div>
+        </div>
+        <div class="pushed-next-foot">
+          <div class="task-sheet-tags">${badges.join('')}</div>
+          ${renderTaskSheetLinks(task)}
+        </div>
+        </div>
+      </div>
+    `;
+    syncEnrouteSheet();
+  },
+
+  dismissRecommendation() {
+    const stopTransitBackground = state.mapMode === 'enroute' && state.enrouteStartedBackground;
+    clearInterval(state.recInterval);
+    stopNavSimulation();
+    clearShiftDemo();
+    state.mapMode = 'idle';
+    state.selectedTaskId = null;
+    state.recSeconds = 0;
+    state.mapFreeBrowse = false;
+    state.mapBearingMode = 'north';
+    state.userHeadingTrusted = null;
+    state.continuousCollect = false;
+    clearTransitLayers();
+    state.transitPts = null;
+    state.enrouteArrived = false;
+    state.enrouteStartedBackground = false;
+    state.navFollow = false;
+    state.navDistanceM = 0;
+    state.cardRecording = false;
+    if (stopTransitBackground) stopBackgroundRecording();
+    if (state.map && typeof state.map.setBearing === 'function') state.map.setBearing(0);
+    App.renderPushedTaskCard(null);
+    const sheet = document.getElementById('task-sheet');
+    if (sheet) {
+      sheet.classList.remove('is-next-deck', 'is-recommend');
+      sheet.classList.add('hidden');
+      sheet.innerHTML = '';
+    }
+    App.renderMapTasks();
+    App.updateMapChrome();
   },
 
   exitCapture() {
+    const stopTransitBackground = state.mapMode === 'enroute' && state.enrouteStartedBackground;
     clearInterval(state.recInterval);
+    stopNavSimulation();
     state.mapMode = 'idle';
     state.recSeconds = 0;
+    state.mapFreeBrowse = false;
+    state.mapBearingMode = 'north';
+    state.userHeadingTrusted = null;
     state.recordingAlertType = null;
     state.recordingAlertDismissed = {};
     state.recordingPausedByAlert = false;
     state.recordingDeviceFault = null;
     state.captureRestMode = false;
+    state.continuousCollect = false;
+    clearTransitLayers();
+    state.transitPts = null;
+    state.enrouteArrived = false;
+    state.enrouteStartedBackground = false;
+    state.cardRecording = false;
+    if (stopTransitBackground) stopBackgroundRecording();
+    App.renderPushedTaskCard(null);
+    document.getElementById('task-sheet')?.classList.remove('is-next-deck', 'is-recommend');
     App.closeModal('modal-recording-alert');
     App.renderMapTasks();
     App.renderTaskSheet();
@@ -2707,6 +3250,7 @@ const App = {
   },
 
   showRecordingAlert(type) {
+    if (type === 'storage_full') return;
     const config = RECORDING_ALERTS[type];
     if (!config) return;
 
@@ -2780,30 +3324,49 @@ const App = {
       App.renderTaskSheet();
     }
     stopShift();
+    state.shiftDistanceKm = 0;
+    state.backgroundRecSeconds = 0;
+    App.updateMapChrome();
+  },
+
+  stopAutoCollect() {
+    clearInterval(state.recInterval);
+    stopNavSimulation();
+    clearShiftDemo();
+    state.mapMode = 'idle';
+    state.selectedTaskId = null;
+    state.recSeconds = 0;
+    state.mapFreeBrowse = false;
+    state.mapBearingMode = 'north';
+    state.userHeadingTrusted = null;
+    state.continuousCollect = false;
+    clearTransitLayers();
+    state.transitPts = null;
+    state.enrouteArrived = false;
+    state.enrouteStartedBackground = false;
+    state.navFollow = false;
+    state.navDistanceM = 0;
+    state.cardRecording = false;
+    state.recordingAlertType = null;
+    state.recordingPausedByAlert = false;
+    state.recordingDeviceFault = null;
+    if (state.map && typeof state.map.setBearing === 'function') state.map.setBearing(0);
+    App.renderPushedTaskCard(null);
+    const sheet = document.getElementById('task-sheet');
+    if (sheet) {
+      sheet.classList.remove('is-next-deck', 'is-recommend');
+      sheet.classList.add('hidden');
+      sheet.innerHTML = '';
+    }
+    App.closeModal('modal-recording-alert');
+    stopShift();
+    App.renderMapTasks();
     App.updateMapChrome();
   },
 
   toggleShift() {
-    if (state.shiftDragSuppressClick) {
-      state.shiftDragSuppressClick = false;
-      return;
-    }
-    if (state.shiftPaused) {
-      if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
-        toast('Finish or cancel the current task first');
-        return;
-      }
-      resumeShift();
-      App.updateMapChrome();
-      return;
-    }
-    if (state.shiftActive) {
-      if (['navigating', 'recording', 'completing'].includes(state.mapMode)) {
-        toast('Finish or cancel the current task first');
-        return;
-      }
-      pauseShift();
-      App.updateMapChrome();
+    if (state.shiftActive || state.shiftPaused) {
+      App.stopAutoCollect();
       return;
     }
     if (state.screen !== 'map') App.go('map');
@@ -2814,11 +3377,6 @@ const App = {
   runShiftDemoTaskFlow(taskId) {
     const t = state.mapTasks.find((x) => x.task_id === taskId);
     if (!t || !state.shiftActive) return;
-    if (t.display_state === 'unclaimed' || !t.claimed_by_me) {
-      App.acceptTask(taskId);
-      scheduleShiftDemo(() => App.runShiftDemoCapture(taskId), SHIFT_DEMO_STEP_MS);
-      return;
-    }
     App.runShiftDemoCapture(taskId);
   },
 
@@ -2844,28 +3402,6 @@ const App = {
       if (!state.shiftActive) return;
       App.tapRecord();
     }, SHIFT_DEMO_STEP_MS);
-
-    scheduleShiftDemo(() => {
-      if (!state.shiftActive || state.mapMode !== 'recording') return;
-      App.stopRecording();
-    }, SHIFT_DEMO_STEP_MS * 2);
-
-    scheduleShiftDemo(() => {
-      if (!state.shiftActive || state.mapMode !== 'completing') return;
-      state.completeProximityRetried = true;
-      App.completeTask();
-      toastSuccess('Task submitted');
-    }, SHIFT_DEMO_STEP_MS * 3);
-
-    scheduleShiftDemo(() => {
-      if (!state.shiftActive) return;
-      state.mapMode = 'idle';
-      state.selectedTaskId = null;
-      App.renderMapTasks();
-      App.renderTaskSheet();
-      App.updateMapChrome();
-      App.locateUser();
-    }, SHIFT_DEMO_STEP_MS * 4);
   },
 
   openLogoutModal() {
@@ -2991,8 +3527,110 @@ const App = {
   },
 
   locateUser() {
-    if (state.map) state.map.setView([34.0522, -118.2915], 14);
+    if (!state.map) return;
+    if (state.mapMode === 'recording') {
+      App.recenterMap();
+      return;
+    }
+    if (state.userPos) {
+      frameLatLng(state.userPos, Math.max(state.map.getZoom(), 15), true);
+      if (state.mapMode !== 'recording') animateMapBearing(state.mapBearingMode === 'heading' ? desiredBearing() : 0);
+      return;
+    }
+    state.map.setView([34.0522, -118.2915], 14);
     toast('Centered on your location');
+  },
+
+  openTaskOverview(taskId) {
+    const record = state.records.find((r) => r.task_id === taskId);
+    const task = ensureOverviewTask(record) || state.mapTasks.find((t) => t.task_id === taskId);
+    if (!task) return;
+    stopNavSimulation();
+    state.selectedTaskId = task.task_id;
+    state.mapMode = 'overview';
+    state.mapBearingMode = 'north';
+    state.navFollow = false;
+    state.mapFreeBrowse = false;
+    state.userHeadingTrusted = null;
+    state.navDistanceM = 0;
+    App.go('map');
+    setTimeout(() => {
+      placeBrowseUser(task);
+      fitTaskWithNeighbors(task);
+      updateOrientButton();
+      App.renderTaskSheet();
+      App.updateMapChrome();
+    }, 220);
+  },
+
+  startOverviewRecording() {
+    const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    if (!t) return;
+    syncPreconditionsFromDevice();
+    if (!allPreconditionsOk() || state.settings.simulateFailedChecks) {
+      state.recordAfterPrecondition = true;
+      App.openPrecondition();
+      return;
+    }
+    state.recordAfterPrecondition = false;
+    t.display_state = 'claimed';
+    t.claimed_by_me = true;
+    resetBeginCaptureState();
+    state.recSeconds = 0;
+    App.tapRecord();
+  },
+
+  toggleMapCamera() {
+    if (!state.map) return;
+    const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    if (state.mapCameraMode === 'route-overview') {
+      state.mapCameraMode = 'follow-north';
+      state.mapBearingMode = 'heading';
+      state.routeOverviewHold = false;
+      state.mapFreeBrowse = false;
+      state.navFollow = state.mapMode === 'recording' || state.mapMode === 'enroute';
+      if (state.map.stop) state.map.stop();
+      updateOrientButton();
+      updateRecenterButton();
+      syncCourseMarkerRotation();
+      if (state.userPos && state.navFollow) followCamera(true);
+      return;
+    }
+    state.mapCameraMode = 'route-overview';
+    state.routeOverviewHold = true;
+    state.navFollow = false;
+    state.mapFreeBrowse = true;
+    clearTimeout(state.navRecenterTimer);
+    if (typeof state.map.setBearing === 'function') state.map.setBearing(0);
+    updateOrientButton();
+    updateRecenterButton();
+    syncCourseMarkerRotation();
+    if (state.mapMode === 'enroute') fitTransitInSafeArea(task);
+    else if (task) fitTaskInSafeArea(task);
+  },
+
+  toggleMapBearing() {
+    App.toggleMapCamera();
+  },
+
+  recenterMap() {
+    if (!state.map || !state.userPos) return;
+    clearTimeout(state.navRecenterTimer);
+    state.mapFreeBrowse = false;
+    if (state.mapMode === 'recording' || state.mapMode === 'enroute') state.navFollow = true;
+    updateRecenterButton();
+    state.mapCameraMode = 'follow-north';
+    state.routeOverviewHold = false;
+    state.navFollow = state.mapMode === 'recording' || state.mapMode === 'enroute';
+    updateRecenterButton();
+    updateOrientButton();
+    state.mapBearingMode = 'heading';
+    if (state.navFollow) followCamera(true);
+    else {
+      syncCourseMarkerRotation();
+      const zoom = state.map.getZoom() < 15 ? 16 : state.map.getZoom();
+      frameLatLng(state.userPos, zoom, true);
+    }
   },
 
   zoomMap(dir) {
@@ -3039,6 +3677,7 @@ const App = {
     if (!groups.length) {
       document.getElementById('task-list').innerHTML =
         '<div class="task-empty">No tasks match your filters.</div>';
+      App.updateUploadFab();
       return;
     }
 
@@ -3051,26 +3690,122 @@ const App = {
         </section>`
       )
       .join('');
+    App.updateUploadFab();
   },
 
   renderTaskCardHtml(r) {
     const title = r.title || r.mapping_title || r.task_id;
-    const copyIcon =
-      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    const uploadStatus = getRecordUploadStatus(r);
+    const incomplete = isRecordUploadIncomplete(r);
+    const progress = getUploadProgress(r);
+    const ticketId = r.ticket_id || r.task_id;
+    const closeBtn = renderTaskCardCloseBtn(`event.stopPropagation();App.dismissTaskCard('${r.task_id}')`);
 
-    return `<article class="task-submit-card" onclick="App.openTaskDetail('${r.task_id}')">
-      ${renderTaskCardCloseBtn(`event.stopPropagation();App.dismissTaskCard('${r.task_id}')`)}
-      <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}"></div>
+    if (incomplete) {
+      const statusText =
+        uploadStatus === 'uploading'
+          ? 'Uploading'
+          : uploadStatus === 'paused'
+            ? 'Paused'
+            : uploadStatus === 'failed'
+              ? 'Failed'
+              : 'Waiting';
+      const barTone =
+        uploadStatus === 'failed'
+          ? 'is-failed'
+          : uploadStatus === 'paused'
+            ? 'is-paused'
+            : uploadStatus === 'uploading'
+              ? 'is-uploading'
+              : '';
+
+      // Max 2 controls: Copy ID always; Retry/Resume only when recovery is needed
+      let actionBtn = '';
+      if (uploadStatus === 'failed') {
+        actionBtn = `<button type="button" class="task-submit-btn task-submit-btn--action task-submit-btn--fail" onclick="event.stopPropagation();App.retryTaskUpload('${r.task_id}')">${TASK_RETRY_ICON}<span>Retry</span></button>`;
+      } else if (uploadStatus === 'paused') {
+        actionBtn = `<button type="button" class="task-submit-btn task-submit-btn--action task-submit-btn--resume" onclick="event.stopPropagation();App.resumeTaskUpload('${r.task_id}')">${TASK_RESUME_ICON}<span>Resume</span></button>`;
+      }
+
+      const copyBtn = actionBtn
+        ? `<button type="button" class="task-submit-btn task-submit-btn--copy task-submit-btn--icon" title="Copy ID" aria-label="Copy ID" onclick="event.stopPropagation();App.copyTicketId('${ticketId}')">${TASK_COPY_ID_ICON}</button>`
+        : `<button type="button" class="task-submit-btn task-submit-btn--copy" onclick="event.stopPropagation();App.copyTicketId('${ticketId}')">${TASK_COPY_ID_ICON}<span>Copy ID</span></button>`;
+
+      return `<article class="task-submit-card task-submit-card--pending task-submit-card--${uploadStatus}" onclick="App.openTaskOverview('${r.task_id}')">
+        ${closeBtn}
+        <div class="task-submit-body task-submit-body--pending">
+          <h4 class="task-submit-title">${title}</h4>
+          <p class="task-submit-time">${formatRecordDate(r.shot_at)}</p>
+          <div class="task-card-progress-row">
+            <div class="task-card-progress ${barTone}" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100" aria-label="${statusText} ${progress}%">
+              <span style="width:${progress}%"></span>
+            </div>
+            <span class="task-card-progress-pct">${progress}%</span>
+          </div>
+          <div class="task-submit-actions task-submit-actions--split">
+            <span class="task-card-status-text task-card-status-text--${uploadStatus}">${statusText}</span>
+            <div class="task-submit-action-group">
+              ${copyBtn}
+              ${actionBtn}
+            </div>
+          </div>
+        </div>
+      </article>`;
+    }
+
+    return `<article class="task-submit-card" onclick="App.openTaskOverview('${r.task_id}')">
+      ${closeBtn}
+      <div class="task-submit-thumb task-media-thumb--${r.thumb || 'street'}">
+        <span class="task-submit-status task-submit-status--uploaded">Uploaded</span>
+      </div>
       <div class="task-submit-body">
         <h4 class="task-submit-title">${title}</h4>
-        ${renderTaskUploadStatusBadge(r)}
         <p class="task-submit-time">${formatRecordDate(r.shot_at)}</p>
         <p class="task-submit-meta">${r.duration} | ${r.size}</p>
         <div class="task-submit-actions">
-          <button type="button" class="task-submit-btn task-submit-btn--copy" onclick="event.stopPropagation();App.copyTicketId('${r.ticket_id || r.task_id}')">${copyIcon}<span>Copy ID</span></button>
+          <button type="button" class="task-submit-btn task-submit-btn--copy" onclick="event.stopPropagation();App.copyTicketId('${ticketId}')">${TASK_COPY_ID_ICON}<span>Copy ID</span></button>
         </div>
       </div>
     </article>`;
+  },
+
+  updateUploadFab() {
+    const fab = document.getElementById('upload-fab');
+    if (!fab) return;
+    const pending = getIncompleteUploadRecords().length;
+    const running = !!state.uploadBatchRunning;
+    const paused = !!state.uploadPaused;
+    const connecting = !!state.uploadConnecting;
+
+    fab.classList.toggle('is-busy', running || connecting);
+    fab.classList.toggle('is-paused', paused && !running);
+    fab.classList.toggle('is-empty', pending === 0 && !running && !paused);
+
+    let label = 'Batch upload';
+    let icon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" aria-hidden="true">
+      <path d="M12 16V5" stroke-linecap="round"/>
+      <path d="m8 9 4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 19h14" stroke-linecap="round"/>
+    </svg>`;
+
+    if (connecting) {
+      label = 'Connecting…';
+      icon = `<span class="upload-fab-spinner" aria-hidden="true"></span>`;
+    } else if (running) {
+      label = 'Pause upload';
+      icon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" aria-hidden="true"><path d="M8 6h3v12H8zM13 6h3v12h-3z"/></svg>`;
+    } else if (paused) {
+      label = 'Resume upload';
+      icon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" aria-hidden="true"><path d="M8 6.5v11l9-5.5-9-5.5Z" stroke-linejoin="round"/></svg>`;
+    }
+
+    const badge =
+      pending > 0 && !running && !connecting
+        ? `<span class="upload-fab-badge">${pending > 9 ? '9+' : pending}</span>`
+        : '';
+
+    fab.setAttribute('aria-label', label);
+    fab.innerHTML = `${icon}${badge}<span class="upload-fab-label">${label}</span>`;
   },
 
   refreshTaskList() {
@@ -3078,7 +3813,99 @@ const App = {
     toast('Refreshed');
   },
 
+  onUploadFabClick() {
+    if (state.uploadConnecting) return;
+    if (state.uploadBatchRunning) {
+      App.pauseBatchUpload();
+      return;
+    }
+    if (state.uploadPaused) {
+      App.resumeBatchUpload();
+      return;
+    }
+    App.startBatchUploadFromTasks();
+  },
+
+  startBatchUploadFromTasks() {
+    const targets = getIncompleteUploadRecords();
+    if (!targets.length) {
+      toast('Nothing to upload');
+      App.updateUploadFab();
+      return;
+    }
+
+    const kickOff = () => {
+      state.uploadQueueTargets = targets;
+      state.uploadQueueIndex = 0;
+      state.uploadBatchRunning = true;
+      state.uploadPaused = false;
+      state.uploadDoneCount = 0;
+      state.uploadTotalCount = targets.length;
+      state.uploadActiveTitle = null;
+      targets.forEach((r) => {
+        if (r.upload_status === 'failed' || r.upload_status === 'paused') {
+          // keep progress so resume continues; failed retries from progress
+        }
+        if (r.upload_status === 'pending') r.upload_progress = 0;
+      });
+      toast(`Uploading ${targets.length} video(s)…`);
+      if (state.screen === 'tasks') App.renderTaskList();
+      else if (state.screen === 'upload-status') App.renderUploadStatus();
+      App._uploadTickCurrent();
+    };
+
+    if (!state.uploadDeviceConnected) {
+      state.uploadConnecting = true;
+      App.updateUploadFab();
+      if (state.screen === 'tasks') App.renderTaskList();
+      setTimeout(() => {
+        state.uploadConnecting = false;
+        state.uploadDeviceConnected = true;
+        toast('GoPro connected');
+        kickOff();
+      }, 700);
+      return;
+    }
+    kickOff();
+  },
+
+  retryTaskUpload(taskId) {
+    const r = state.records.find((x) => x.task_id === taskId);
+    if (!r) return;
+    r.upload_status = 'pending';
+    r.upload_progress = 0;
+    r.upload_retry_count = (r.upload_retry_count || 0) + 1;
+    toast('Queued for retry');
+    if (state.uploadBatchRunning || state.uploadPaused) {
+      App.renderTaskList();
+      return;
+    }
+    App.startBatchUploadFromTasks();
+  },
+
+  resumeTaskUpload(taskId) {
+    const r = state.records.find((x) => x.task_id === taskId);
+    if (!r) return;
+    r.upload_status = 'pending';
+    if (state.uploadPaused) {
+      App.resumeBatchUpload();
+      return;
+    }
+    App.startBatchUploadFromTasks();
+  },
+
   openUploadStatus() {
+    state.uploadBatchRunning = false;
+    state.uploadPaused = false;
+    state.uploadConnecting = false;
+    state.uploadActiveTitle = null;
+    state.uploadDoneCount = 0;
+    state.uploadTotalCount = 0;
+    if (state.uploadTick) {
+      clearInterval(state.uploadTick);
+      state.uploadTick = null;
+    }
+    syncUploadQueueFromRecords();
     App.go('upload-status');
   },
 
@@ -3087,19 +3914,47 @@ const App = {
     const footer = document.getElementById('upload-status-footer');
     if (!body || !footer) return;
 
+    syncUploadQueueFromRecords();
+
     const connected = state.uploadDeviceConnected;
-    const order = { pending: 0, failed: 1, uploading: 2, uploaded: 3 };
-    const items = [...state.uploadQueue].sort((a, b) => order[a.state] - order[b.state]);
-    const ready = items.filter((i) => i.state === 'pending' || i.state === 'failed').length;
+    const connecting = !!state.uploadConnecting;
+    const running = !!state.uploadBatchRunning;
+    const paused = !!state.uploadPaused;
+    const order = { uploading: 0, pending: 1, paused: 2, failed: 3, uploaded: 4 };
+    const items = [...state.uploadQueue].sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9));
+    const ready = items.filter((i) => i.state === 'pending' || i.state === 'failed' || i.state === 'paused').length;
+    const uploading = items.filter((i) => i.state === 'uploading').length;
+    const actionable = ready + uploading;
 
     const banner = connected
       ? `<div class="upload-device-banner upload-device-banner--ok">
-          <div><strong>Connected · GoPro HERO</strong><p>Ready for batch upload from this device</p></div>
+          <div>
+            <strong>Connected · GoPro HERO</strong>
+            <p>${
+              running
+                ? `Uploading${state.uploadActiveTitle ? ` · ${state.uploadActiveTitle}` : ''} · ${state.uploadDoneCount}/${state.uploadTotalCount}`
+                : paused
+                  ? `Paused · ${state.uploadDoneCount}/${state.uploadTotalCount} done`
+                  : ready > 0
+                    ? `${ready} waiting in queue`
+                    : 'Queue is clear'
+            }</p>
+          </div>
         </div>`
       : `<div class="upload-device-banner upload-device-banner--warn">
-          <div><strong>Device not connected</strong><p>Connect GoPro to pull local media and upload</p></div>
-          <button type="button" class="btn btn-primary upload-connect-btn" onclick="App.connectUploadDevice()">Connect</button>
+          <div><strong>GoPro not connected</strong><p>Connect to pull local media and start batch upload</p></div>
         </div>`;
+
+    const pct = state.uploadTotalCount
+      ? Math.round((state.uploadDoneCount / state.uploadTotalCount) * 100)
+      : 0;
+    const progressBlock =
+      running || paused
+        ? `<div class="upload-overall-wrap">
+            <div class="upload-overall ${paused ? 'is-paused' : ''}"><span style="width:${pct}%"></span></div>
+            <p class="upload-overall-label">${paused ? 'Paused' : 'Uploading'} · ${pct}%</p>
+          </div>`
+        : '';
 
     const list = items.length
       ? items
@@ -3109,21 +3964,25 @@ const App = {
                 ? 'Pending'
                 : i.state === 'failed'
                   ? 'Failed'
-                  : i.state === 'uploading'
-                    ? 'Uploading'
-                    : 'Uploaded';
+                  : i.state === 'paused'
+                    ? 'Paused'
+                    : i.state === 'uploading'
+                      ? 'Uploading'
+                      : 'Uploaded';
             const tone =
               i.state === 'failed'
                 ? 'fail'
                 : i.state === 'uploading'
                   ? 'up'
-                  : i.state === 'uploaded'
-                    ? 'done'
-                    : 'pend';
+                  : i.state === 'paused'
+                    ? 'up'
+                    : i.state === 'uploaded'
+                      ? 'done'
+                      : 'pend';
             const bar =
-              i.state === 'uploading' || (i.state === 'uploaded' && i.progress > 0)
+              i.state === 'uploading' || i.state === 'paused' || (i.state === 'failed' && i.progress > 0) || (i.state === 'uploaded' && i.progress > 0)
                 ? `<div class="upload-progress"><span style="width:${i.progress}%"></span></div>
-                   ${i.state === 'uploading' ? `<p class="upload-progress-label">${i.progress}%</p>` : ''}`
+                   ${i.state === 'uploading' || i.state === 'paused' ? `<p class="upload-progress-label">${i.progress}%</p>` : ''}`
                 : '';
             return `<article class="upload-queue-card">
               <div class="upload-queue-top">
@@ -3137,57 +3996,146 @@ const App = {
           .join('')
       : '<div class="task-empty">Upload queue is empty</div>';
 
-    body.innerHTML = `${banner}<p class="upload-list-hint">${ready > 0 ? `${ready} waiting to upload` : 'No pending uploads'}</p>${list}`;
+    body.innerHTML = `${banner}${progressBlock}${list}`;
 
-    const disabled = state.uploadBatchRunning || ready === 0 || !connected;
+    let label = 'Connect & upload all';
+    let action = 'App.startBatchUploadFromTasks()';
+    let disabled = connecting;
+    let btnClass = 'btn-primary';
+
+    if (connected) {
+      if (running) {
+        label = 'Pause';
+        action = 'App.pauseBatchUpload()';
+        disabled = false;
+        btnClass = 'btn-ghost upload-btn-pause';
+      } else if (paused) {
+        label = 'Resume';
+        action = 'App.resumeBatchUpload()';
+        disabled = false;
+      } else {
+        label = actionable > 0 ? `Upload all (${actionable})` : 'Upload all';
+        action = 'App.startBatchUploadFromTasks()';
+        disabled = actionable === 0;
+      }
+    } else if (connecting) {
+      label = 'Connecting…';
+    }
+
     footer.innerHTML = `
-      <button type="button" class="btn ${connected && ready > 0 ? 'btn-primary' : 'btn-ghost'}" ${disabled ? 'disabled' : ''} onclick="App.runBatchUpload()">
-        ${state.uploadBatchRunning ? 'Uploading…' : ready > 0 ? `Batch Upload (${ready})` : 'Batch Upload'}
-      </button>
-      ${!connected && ready > 0 ? '<p class="upload-footer-hint">Connect device to enable batch upload</p>' : ''}`;
+      <button type="button" class="btn ${btnClass}" ${disabled ? 'disabled' : ''} onclick="${action}">
+        ${label}
+      </button>`;
   },
 
   connectUploadDevice() {
-    state.uploadDeviceConnected = true;
-    toast('GoPro connected');
+    if (state.uploadConnecting) return;
+    state.uploadConnecting = true;
     App.renderUploadStatus();
+    setTimeout(() => {
+      state.uploadConnecting = false;
+      state.uploadDeviceConnected = true;
+      toast('GoPro connected');
+      if (state.screen === 'upload-status') App.renderUploadStatus();
+      App.updateUploadFab();
+    }, 400);
+  },
+
+  pauseBatchUpload() {
+    if (!state.uploadBatchRunning) return;
+    state.uploadPaused = true;
+    state.uploadBatchRunning = false;
+    if (state.uploadTick) {
+      clearInterval(state.uploadTick);
+      state.uploadTick = null;
+    }
+    (state.uploadQueueTargets || []).forEach((r) => {
+      if (r.upload_status === 'uploading') r.upload_status = 'paused';
+    });
+    toast('Upload paused');
+    if (state.screen === 'tasks') App.renderTaskList();
+    if (state.screen === 'upload-status') App.renderUploadStatus();
+    App.updateUploadFab();
+  },
+
+  resumeBatchUpload() {
+    if (!state.uploadDeviceConnected || !state.uploadPaused) {
+      App.startBatchUploadFromTasks();
+      return;
+    }
+    state.uploadPaused = false;
+    state.uploadBatchRunning = true;
+    (state.uploadQueueTargets || []).forEach((r) => {
+      if (r.upload_status === 'paused') r.upload_status = 'uploading';
+    });
+    if (state.screen === 'tasks') App.renderTaskList();
+    if (state.screen === 'upload-status') App.renderUploadStatus();
+    App.updateUploadFab();
+    App._uploadTickCurrent();
   },
 
   runBatchUpload() {
-    if (!state.uploadDeviceConnected) {
-      toast('Connect GoPro first');
-      return;
-    }
-    const targets = state.uploadQueue.filter((i) => i.state === 'pending' || i.state === 'failed');
-    if (!targets.length) {
-      toast('Nothing to upload');
-      return;
-    }
-    state.uploadBatchRunning = true;
-    targets.forEach((i) => {
-      i.state = 'uploading';
-      i.progress = 0;
-    });
-    App.renderUploadStatus();
+    App.startBatchUploadFromTasks();
+  },
 
-    let remaining = targets.length;
-    targets.forEach((item) => {
-      const tick = setInterval(() => {
-        item.progress = Math.min(100, item.progress + 14 + Math.floor(Math.random() * 10));
-        if (item.progress >= 100) {
-          clearInterval(tick);
-          item.state = 'uploaded';
-          item.progress = 100;
-          item.retry_count = 0;
-          remaining -= 1;
-          if (remaining === 0) {
-            state.uploadBatchRunning = false;
-            toast(`${targets.length} task(s) uploaded`);
-          }
-        }
+  _uploadTickCurrent() {
+    if (state.uploadPaused || !state.uploadBatchRunning) return;
+    const targets = state.uploadQueueTargets || [];
+    if (state.uploadQueueIndex >= targets.length) {
+      state.uploadBatchRunning = false;
+      state.uploadActiveTitle = null;
+      toast(`${state.uploadTotalCount} video(s) uploaded`);
+      if (state.screen === 'tasks') App.renderTaskList();
+      if (state.screen === 'upload-status') App.renderUploadStatus();
+      App.updateUploadFab();
+      return;
+    }
+
+    const item = targets[state.uploadQueueIndex];
+    // Skip already finished (e.g. after partial run)
+    if (getRecordUploadStatus(item) === 'uploaded') {
+      state.uploadQueueIndex += 1;
+      setTimeout(() => App._uploadTickCurrent(), 40);
+      return;
+    }
+
+    state.uploadActiveTitle = item.title || item.mapping_title || item.task_id;
+    item.upload_status = 'uploading';
+    item.upload_progress = item.upload_progress || 0;
+    if (state.screen === 'tasks') App.renderTaskList();
+    if (state.screen === 'upload-status') App.renderUploadStatus();
+    App.updateUploadFab();
+
+    if (state.uploadTick) clearInterval(state.uploadTick);
+    state.uploadTick = setInterval(() => {
+      if (state.uploadPaused || !state.uploadBatchRunning) {
+        clearInterval(state.uploadTick);
+        state.uploadTick = null;
+        return;
+      }
+      item.upload_progress = Math.min(
+        100,
+        (item.upload_progress || 0) + 14 + Math.floor(Math.random() * 12)
+      );
+      // Demo: first failed card fails again once if retry_count is 0 — skip, always succeed for demo flow
+      if (item.upload_progress >= 100) {
+        clearInterval(state.uploadTick);
+        state.uploadTick = null;
+        item.upload_status = 'uploaded';
+        item.upload_progress = 100;
+        item.upload_retry_count = 0;
+        item.audit_stage = item.audit_stage === 'submitted' ? 'reviewing' : item.audit_stage;
+        state.uploadDoneCount += 1;
+        state.uploadQueueIndex += 1;
+        if (state.screen === 'tasks') App.renderTaskList();
         if (state.screen === 'upload-status') App.renderUploadStatus();
-      }, 280);
-    });
+        App.updateUploadFab();
+        setTimeout(() => App._uploadTickCurrent(), 160);
+        return;
+      }
+      if (state.screen === 'tasks') App.renderTaskList();
+      if (state.screen === 'upload-status') App.renderUploadStatus();
+    }, 220);
   },
 
   openDailySummary() {
@@ -3449,7 +4397,14 @@ function bootApp() {
     state.auth = { region: 'US', userId: 'US-156', displayName: 'User Wang' };
     App.showLoginScreen();
     App.initLoginForm();
-    App.go(bootParams.get('demo') === 'upload' ? 'upload-status' : 'tasks');
+    if (bootParams.get('demo') === 'upload') {
+      state.uploadDeviceConnected = false;
+      state.uploadPaused = false;
+      state.uploadBatchRunning = false;
+      App.go('upload-status');
+    } else {
+      App.go('tasks');
+    }
     return;
   }
   if (bootParams.get('demo') === 'recording') {
@@ -3460,7 +4415,7 @@ function bootApp() {
       wifi: 'wifi_lost',
     };
     const alert = alertMap[bootParams.get('alert')] || null;
-    bootDemoRecording(alert);
+    bootDemoRecording(alert === 'storage_full' ? null : alert);
     return;
   }
   if (bootParams.get('demo') === 'precheck') {
@@ -3489,7 +4444,7 @@ try {
   bindShiftControls();
   bootApp();
 } catch (err) {
-  console.error('GoSnap boot failed', err);
+  console.error('Project Rover boot failed', err);
   App.showLoginScreen();
   try {
     App.initLoginForm();

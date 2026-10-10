@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-    <title>GoSnap — LBS Road Test Demo</title>
+    <title>Project Rover — LBS Road Test Demo</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260630r" />
+    <link rel="stylesheet" href="styles.css?v=20261010u" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -22,9 +22,9 @@
       <div class="screen splash-screen active" id="screen-splash">
         <div class="splash-body">
           <div class="splash-icon-wrap">
-            <img class="splash-icon" src="assets/app-icon.png" alt="GoSnap" width="120" height="120" />
+            <img class="splash-icon" src="assets/app-icon.png" alt="Project Rover" width="120" height="120" />
           </div>
-          <h1 class="splash-title">GO SNAP</h1>
+          <h1 class="splash-title">Project Rover</h1>
           <p class="splash-slogan">DISCOVER THE GOOD LIFE</p>
           <div class="splash-loading">
             <p class="splash-status" id="splash-status">STARTING...</p>
@@ -52,7 +52,7 @@
             <div class="login-app-icon" aria-hidden="true">
               <img src="assets/app-icon.png?v=4" alt="" width="108" height="108" />
             </div>
-            <h1 class="login-title">GO SNAP</h1>
+            <h1 class="login-title">Project Rover</h1>
             <p class="login-slogan">DISCOVER THE GOOD LIFE</p>
           </div>
         </div>
@@ -113,7 +113,7 @@
                   aria-labelledby="precheck-location-title"
                   onclick="event.stopPropagation()"
                 >
-                  <h3 class="ios-alert-title" id="precheck-location-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
+                  <h3 class="ios-alert-title" id="precheck-location-title">Allow &ldquo;Project Rover&rdquo; to use your location?</h3>
                   <p class="ios-alert-body">
                     Your precise location is used to show your position on the map, record routes accurately,
                     and verify you are at the task start point before recording.
@@ -200,7 +200,7 @@
               </div>
               <div class="device-list-heading-row">
                 <h4 class="device-list-heading">Available Devices</h4>
-                <span class="device-list-hint">Select up to 2</span>
+                <span class="device-list-hint">Select 1</span>
               </div>
               <div class="device-list-card" id="gopro-list">
                 <div class="device-scan-state device-scan-state--idle">
@@ -287,10 +287,7 @@
             </div>
           </div>
           <div id="map"></div>
-          <div class="nav-banner hidden" id="nav-banner">
-            <div class="nav-turn">↱</div>
-            <div class="nav-dist">2.5 km</div>
-          </div>
+          <div class="nav-banner hidden" id="nav-banner" aria-live="polite"></div>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
             <div class="map-shift-row">
               <div class="map-shift-drag" id="map-shift-drag">
@@ -302,6 +299,10 @@
                   aria-pressed="false"
                   aria-label="Start shift"
                 >
+                  <span class="map-shift-play" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M8.5 5.2v13.6L19.2 12 8.5 5.2z" fill="currentColor"/></svg>
+                  </span>
+                  <span class="map-shift-pause-icon" aria-hidden="true"></span>
                   <span class="map-shift-btn-text" data-shift-action>Start</span>
                 </button>
               </div>
@@ -320,12 +321,28 @@
             </div>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
-            <button type="button" class="map-float-btn" onclick="App.exitCapture()">Close</button>
+            <button type="button" class="map-float-btn" onclick="App.exitCapture()">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6" stroke-linecap="round"/></svg>
+              <span>Exit</span>
+            </button>
             <button type="button" class="map-float-btn map-float-rest hidden" id="map-float-rest" onclick="toast('Rest break started')">Rest</button>
-            <button type="button" class="map-float-btn" id="map-float-over" onclick="App.toggleCaptureRest()">Over</button>
+            <button type="button" class="map-float-btn map-float-overview" id="map-float-over" onclick="App.toggleMapCamera()" aria-pressed="false" aria-label="Overview">
+              <span class="map-orient-icon map-orient-icon--overview" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="4" y="4" width="16" height="16" rx="3"/>
+                  <path d="M8 15.5 11.2 9.2 14.2 13.2 17 8.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="map-orient-icon map-orient-icon--follow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path d="M12 3.2 19.2 20.2 12 16.2 4.8 20.2Z" fill="currentColor"/>
+                </svg>
+              </span>
+              <span class="map-orient-label">Overview</span>
+            </button>
           </div>
           <div class="map-rail" id="map-rail">
-            <button class="rail-btn" onclick="App.openFilterSheet()" aria-label="Filter">
+            <button class="rail-btn" id="map-filter-btn" onclick="App.openFilterSheet()" aria-label="Filter">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
               </svg>
@@ -344,13 +361,16 @@
 
           <!-- Active capture (navigate / record / complete) -->
           <div class="capture-sheet hidden" id="capture-sheet">
-            <h2 class="capture-title" id="capture-title">Sorrento Valley</h2>
-            <div class="capture-timer-row">
-              <span class="capture-dot" id="capture-dot"></span>
-              <span class="capture-time" id="capture-time">0:00</span>
+            <div class="pushed-task-card hidden" id="pushed-task-card"></div>
+            <h2 class="capture-title visually-hidden" id="capture-title">Sorrento Valley</h2>
+            <div class="capture-submit-row">
+              <div class="capture-timer-row">
+                <span class="capture-dot" id="capture-dot"></span>
+                <span class="capture-time" id="capture-time">0:00</span>
+              </div>
+              <button type="button" class="capture-submit" id="capture-submit" onclick="App.submitCapture()">Submit</button>
             </div>
-            <div class="capture-controls" id="capture-controls"></div>
-            <p class="capture-hint">Drive the route — capture in progress</p>
+            <div class="capture-controls" id="capture-controls" hidden></div>
           </div>
           <div class="sheet task-sheet hidden" id="task-sheet"></div>
         </div>
@@ -388,12 +408,13 @@
         <div class="scroll">
           <div class="task-list" id="task-list"></div>
         </div>
-        <button type="button" class="upload-fab" onclick="App.openUploadStatus()" aria-label="Upload status">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.2" aria-hidden="true">
+        <button type="button" class="upload-fab" id="upload-fab" onclick="App.onUploadFabClick()" aria-label="Batch upload">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" aria-hidden="true">
             <path d="M12 16V5" stroke-linecap="round"/>
             <path d="m8 9 4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M5 19h14" stroke-linecap="round"/>
           </svg>
+          <span class="upload-fab-label">Batch upload</span>
         </button>
       </div>
 
@@ -401,7 +422,7 @@
       <div class="screen" id="screen-upload-status">
         <div class="tasks-header">
           <button type="button" class="icon-btn" onclick="App.go('tasks')" aria-label="Back">←</button>
-          <h2>Upload Status</h2>
+          <h2>Batch Upload</h2>
           <span style="width: 40px"></span>
         </div>
         <div class="scroll upload-status-scroll" id="upload-status-body"></div>
@@ -561,7 +582,7 @@
             </div>
           </div>
 
-          <p class="settings-footer">- GoSnap Version 4.12.0 -</p>
+          <p class="settings-footer">- Project Rover Version 4.12.0 -</p>
         </div>
       </div>
 
@@ -574,8 +595,8 @@
         </div>
         <div class="scroll settings-scroll version-scroll">
           <div class="version-hero">
-            <img class="version-app-icon" src="assets/app-icon.png" width="88" height="88" alt="GoSnap" />
-            <h3 class="version-app-name">GoSnap</h3>
+            <img class="version-app-icon" src="assets/app-icon.png" width="88" height="88" alt="Project Rover" />
+            <h3 class="version-app-name">Project Rover</h3>
             <p class="version-number">v4.12.0-stable</p>
             <p class="version-latest">This is the latest version</p>
           </div>
@@ -636,7 +657,7 @@
     <div class="overlay" id="modal-gps-auth">
       <div class="ios-dialog-wrap">
         <div class="ios-location-alert">
-          <h3 class="ios-alert-title">Allow &ldquo;GoSnap&rdquo; to use your location?</h3>
+          <h3 class="ios-alert-title">Allow &ldquo;Project Rover&rdquo; to use your location?</h3>
           <p class="ios-alert-body">
             Your precise location is used to show your position on the map and record routes accurately.
           </p>
@@ -664,7 +685,7 @@
         <div class="ios-location-alert">
           <h3 class="ios-alert-title">Not Enough Storage</h3>
           <p class="ios-alert-body">
-            GoSnap needs more free space to record this route. You can manage storage in Settings.
+            Project Rover needs more free space to record this route. You can manage storage in Settings.
           </p>
           <div class="ios-alert-actions">
             <button type="button" class="ios-alert-btn" onclick="App.returnFromStorageAlert()">Cancel</button>
@@ -692,9 +713,9 @@
         </div>
         <div class="ios-storage-list">
           <div class="ios-storage-row">
-            <div class="ios-storage-app-icon">G</div>
+            <div class="ios-storage-app-icon">R</div>
             <div class="ios-storage-row-body">
-              <strong>GoSnap</strong>
+              <strong>Project Rover</strong>
               <span>2.1 GB</span>
             </div>
             <button type="button" class="ios-storage-offload" onclick="App.confirmStorageFix()">Offload App</button>
@@ -726,7 +747,7 @@
         <div class="ios-system-alert ios-bluetooth-alert">
           <h3 class="ios-alert-title">Turn On Bluetooth</h3>
           <p class="ios-alert-body">
-            GoSnap needs Bluetooth to discover and connect your GoPro capture device.
+            Project Rover needs Bluetooth to discover and connect your GoPro capture device.
           </p>
           <div class="ios-settings-group">
             <div class="ios-settings-row">
@@ -866,7 +887,9 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=20260630r"></script>
+    <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
+    <script src="nav.js?v=20261010v"></script>
+    <script src="app.js?v=20261010v"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
