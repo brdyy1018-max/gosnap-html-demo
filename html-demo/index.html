@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20261019u" />
+    <link rel="stylesheet" href="styles.css?v=20261019y" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -292,7 +292,6 @@
             <span class="next-dest-x" onclick="event.stopPropagation(); App.dismissNextDest()" aria-label="Dismiss destination">×</span>
             <span class="next-dest-copy">
               <strong id="next-dest-dist">Next Destination</strong>
-              <span id="next-dest-name"></span>
             </span>
           </button>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
@@ -331,10 +330,15 @@
               <button type="button" data-collect-mode="auto" onclick="App.setCollectMode('auto')">Auto</button>
             </div>
           </div>
+          <div class="task-fold-card hidden" id="task-fold-card"></div>
           <div class="map-float-actions hidden" id="map-float-actions">
             <button type="button" class="map-float-btn" onclick="App.exitCapture()">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6" stroke-linecap="round"/></svg>
               <span>Exit</span>
+            </button>
+            <button type="button" class="map-task-fold hidden" id="map-task-fold" onclick="App.toggleTaskFold()" aria-expanded="false">
+              <span class="map-task-fold-chevron" aria-hidden="true"></span>
+              <span>Tasks</span>
             </button>
             <button type="button" class="map-float-btn map-float-rest hidden" id="map-float-rest" onclick="toast('Rest break started')">Rest</button>
             <button type="button" class="map-float-btn map-float-overview" id="map-float-over" onclick="App.toggleMapCamera()" aria-pressed="false" aria-label="Overview">
@@ -946,7 +950,7 @@
     ></script>
     <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
     <script src="nav.js?v=20261019q"></script>
-    <script src="app.js?v=20261019u"></script>
+    <script src="app.js?v=20261019y"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

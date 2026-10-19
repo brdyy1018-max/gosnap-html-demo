@@ -297,6 +297,7 @@ const state = {
   transitDistanceM: 0,
   transitLayers: null,
   enrouteArrived: false,
+  taskFoldOpen: false,
   autoFinishing: false,
   enrouteStartedBackground: false,
   nextDestHidden: false,
@@ -1169,7 +1170,7 @@ function runShiftDemo() {
   App.renderNextTaskDeck();
   App.renderMapTasks();
   App.updateMapChrome();
-  toast(nearby.length ? 'Pick a task, then tap Navigate' : 'No claimed tasks nearby');
+  toast(nearby.length ? 'Pick a task, then tap Begin' : 'No claimed tasks nearby');
 }
 
 const AT_TASK_START_M = 50;
@@ -2392,6 +2393,14 @@ const App = {
     document.querySelector('.capture-submit-row')?.classList.toggle('hidden', arrivedCard);
     document.getElementById('capture-submit')?.classList.toggle('hidden', turnHud);
     document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || beginCardVisible()));
+    const foldBtn = document.getElementById('map-task-fold');
+    const foldCard = document.getElementById('task-fold-card');
+    if (!turnHud) state.taskFoldOpen = false;
+    foldBtn?.classList.toggle('hidden', !turnHud);
+    foldBtn?.classList.toggle('is-open', !!state.taskFoldOpen);
+    foldBtn?.setAttribute('aria-expanded', String(!!state.taskFoldOpen));
+    foldCard?.classList.toggle('hidden', !turnHud || !state.taskFoldOpen);
+    if (turnHud && state.taskFoldOpen) App.renderTaskFoldCard();
 
     if (driving && !arrivedCard) {
       renderCaptureControls();
@@ -2945,6 +2954,7 @@ const App = {
   tapRecord() {
     if (!state.shiftActive) beginShiftRecording();
     state.mapMode = 'recording';
+    state.taskFoldOpen = false;
     if (!state.recSeconds) state.recSeconds = 0;
     clearInterval(state.recInterval);
     state.recInterval = setInterval(App.tickRec, 1000);
@@ -3105,8 +3115,8 @@ const App = {
       'next',
       listNearbyOpenTasks(state.userPos),
       'App.dismissRecommendation()',
-      (task) => `App.startNextNavigation('${task.task_id}')`,
-      'Navigate'
+      (task) => `App.beginOrNavigate('${task.task_id}')`,
+      'Begin'
     );
   },
 
@@ -3167,7 +3177,7 @@ const App = {
           ${renderTaskSheetLinks(task)}
           ${
             mode === 'next' && isClaimedTask(task)
-              ? renderStartActions(task, 'Navigate', `App.startNextNavigation('${task.task_id}')`)
+              ? renderStartActions(task, 'Begin', `App.beginOrNavigate('${task.task_id}')`)
               : mode === 'claim' && isClaimedTask(task)
               ? renderStartActions(task)
               : `<div class="task-sheet-actions">
@@ -3230,6 +3240,20 @@ const App = {
     App.updateMapChrome();
   },
 
+  beginOrNavigate(id) {
+    const task = state.mapTasks.find((t) => t.task_id === id);
+    if (!task || !isClaimedTask(task)) return;
+    state.selectedTaskId = id;
+    const start = getTaskEndpoints(task).start;
+    const distanceM = state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : Infinity;
+    if (distanceM <= AT_TASK_START_M) {
+      App.beginAcceptedTask(id);
+      return;
+    }
+    if (state.mapMode !== 'next') state.mapMode = 'next';
+    App.startNextNavigation(id);
+  },
+
   startNextNavigation(taskId) {
     if (state.mapMode !== 'next') return;
     const task = state.mapTasks.find((t) => t.task_id === (taskId || state.selectedTaskId));
@@ -3239,6 +3263,7 @@ const App = {
     state.navDistanceM = 0;
     state.nextDestHidden = false;
     state.enrouteArrived = false;
+    state.taskFoldOpen = false;
     state.enrouteStartedBackground = !state.backgroundRecording;
     startBackgroundRecording();
     const sheet = document.getElementById('task-sheet');
@@ -3355,6 +3380,33 @@ const App = {
     }, 480);
   },
 
+  toggleTaskFold() {
+    if (state.mapMode !== 'recording' && !(state.mapMode === 'enroute' && !state.enrouteArrived)) return;
+    state.taskFoldOpen = !state.taskFoldOpen;
+    App.updateMapChrome();
+  },
+
+  renderTaskFoldCard() {
+    const el = document.getElementById('task-fold-card');
+    const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    if (!el || !task) return;
+    const start = getTaskEndpoints(task).start;
+    const distanceM = state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : (task.distance_from_user_km || 0) * 1000;
+    const km = (distanceM / 1000).toFixed(1);
+    el.innerHTML = `
+      <article class="task-sheet-card">
+        <div class="task-sheet-head">
+          <div class="task-sheet-head-copy">
+            <h2 class="task-sheet-title">${getTaskSheetTitle(task)}</h2>
+            <p class="task-sheet-meta">${km} kilometers away from you | ${task.poi_address || ''}</p>
+          </div>
+          ${renderTaskCardCloseBtn('App.toggleTaskFold()')}
+        </div>
+        ${renderTaskBadges(task)}
+        ${renderTaskSheetLinks(task)}
+      </article>`;
+  },
+
   dismissNextDest() {
     state.nextDestHidden = true;
     App.syncNextDestination();
@@ -3364,15 +3416,13 @@ const App = {
     const el = document.getElementById('next-dest');
     if (!el) return;
     const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
-    const show = state.mapMode === 'enroute' && !state.enrouteArrived && !state.nextDestHidden && !!task;
+    const show = state.mapMode === 'enroute' && !state.enrouteArrived && !state.nextDestHidden && !state.taskFoldOpen && !!task;
     el.classList.toggle('hidden', !show);
     if (!show || !task) return;
     const total = typeof routeCumul === 'function' ? (routeCumul(state.transitPts || []).pop() || 0) : 0;
     const remain = Math.max(0, total - (state.transitDistanceM || 0));
     const dist = document.getElementById('next-dest-dist');
-    const name = document.getElementById('next-dest-name');
     if (dist) dist.textContent = `Next Destination: ${typeof formatNavMeters === 'function' ? formatNavMeters(remain) : ''}`;
-    if (name) name.textContent = getTaskSheetTitle(task);
   },
 
   setCollectMode(mode) {

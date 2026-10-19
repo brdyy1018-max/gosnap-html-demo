@@ -2643,6 +2643,58 @@ body {
   margin-bottom: 4px;
 }
 
+.map-task-fold {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 44px;
+  padding: 0 16px 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.map-task-fold-chevron {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1f2937;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-task-fold-chevron::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid #fff;
+  border-right: 2px solid #fff;
+  transform: translateY(2px) rotate(-45deg);
+}
+
+.map-task-fold.is-open .map-task-fold-chevron::before {
+  transform: translateY(-1px) rotate(135deg);
+}
+
+.task-fold-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 188px;
+  z-index: 545;
+}
+
 .map-float-actions {
   position: absolute;
   left: 14px;
@@ -3029,7 +3081,7 @@ body {
   bottom: 196px;
   z-index: 680;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   max-width: 230px;
   padding: 10px 14px;
