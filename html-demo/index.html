@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20261010u" />
+    <link rel="stylesheet" href="styles.css?v=20261019u" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -288,6 +288,13 @@
           </div>
           <div id="map"></div>
           <div class="nav-banner hidden" id="nav-banner" aria-live="polite"></div>
+          <button type="button" class="next-dest hidden" id="next-dest">
+            <span class="next-dest-x" onclick="event.stopPropagation(); App.dismissNextDest()" aria-label="Dismiss destination">×</span>
+            <span class="next-dest-copy">
+              <strong id="next-dest-dist">Next Destination</strong>
+              <span id="next-dest-name"></span>
+            </span>
+          </button>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
             <div class="map-shift-row">
               <div class="map-shift-drag" id="map-shift-drag">
@@ -302,7 +309,7 @@
                   <span class="map-shift-play" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="16" height="16"><path d="M8.5 5.2v13.6L19.2 12 8.5 5.2z" fill="currentColor"/></svg>
                   </span>
-                  <span class="map-shift-pause-icon" aria-hidden="true"></span>
+                  <span class="map-shift-stop-icon" aria-hidden="true"></span>
                   <span class="map-shift-btn-text" data-shift-action>Start</span>
                 </button>
               </div>
@@ -318,6 +325,10 @@
                   <span class="map-hud-distance-label" data-stat="tasks-label">Tasks Done</span>
                 </div>
               </div>
+            </div>
+            <div class="collect-mode" id="collect-mode" role="group" aria-label="Collection mode">
+              <button type="button" data-collect-mode="manual" class="is-on" onclick="App.setCollectMode('manual')">Manual</button>
+              <button type="button" data-collect-mode="auto" onclick="App.setCollectMode('auto')">Auto</button>
             </div>
           </div>
           <div class="map-float-actions hidden" id="map-float-actions">
@@ -357,6 +368,14 @@
                 <path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round" />
               </svg>
             </button>
+            <button type="button" class="map-discard hidden" id="map-discard" onclick="App.openDiscardSheet()" aria-label="Discard">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M5 7h14" stroke-linecap="round"/>
+                <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" stroke-linecap="round"/>
+                <path d="M7.5 7l.7 12.2A1.5 1.5 0 0 0 9.7 20.6h4.6a1.5 1.5 0 0 0 1.5-1.4L16.5 7" stroke-linejoin="round"/>
+                <path d="M10 11v6M14 11v6" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
 
           <!-- Active capture (navigate / record / complete) -->
@@ -373,6 +392,44 @@
             <div class="capture-controls" id="capture-controls" hidden></div>
           </div>
           <div class="sheet task-sheet hidden" id="task-sheet"></div>
+          <div class="discard-layer hidden" id="discard-layer">
+            <button type="button" class="discard-mask" onclick="App.closeDiscardSheet()" aria-label="Close"></button>
+            <div class="discard-sheet" role="dialog" aria-labelledby="discard-title">
+              <div class="sheet-handle"></div>
+              <div class="sheet-top">
+                <strong id="discard-title">Discard</strong>
+                <button type="button" class="sheet-close" onclick="App.closeDiscardSheet()" aria-label="Close">×</button>
+              </div>
+              <div class="discard-body">
+                <div class="discard-section-head">
+                  <div class="discard-section-title">
+                    <span>1.Reason for Discarding</span>
+                    <span class="discard-required" aria-hidden="true">*</span>
+                    <span class="discard-check hidden" id="discard-check" aria-label="Selected">✓</span>
+                  </div>
+                  <button type="button" class="discard-info" onclick="toast('A reason is required before this recording can be discarded.')" aria-label="About this field">i</button>
+                </div>
+                <div class="discard-reasons" id="discard-reasons">
+                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Task Unreachable" onchange="App.onDiscardReason()" /><span>Task Unreachable</span></label>
+                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Address Not Found" onchange="App.onDiscardReason()" /><span>Address Not Found</span></label>
+                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Other" onchange="App.onDiscardReason()" /><span>Other</span></label>
+                </div>
+                <h3 class="discard-section-label">3. Supplementary Description</h3>
+                <div class="discard-note">
+                  <textarea id="discard-note" maxlength="300" placeholder="Add detail reason." oninput="App.onDiscardNote()"></textarea>
+                  <span class="discard-count" id="discard-count">0/300</span>
+                  <div class="discard-photos" id="discard-photos">
+                    <button type="button" class="discard-add" id="discard-add" onclick="document.getElementById('discard-file').click()">
+                      <span>+</span>
+                      <small>Up to three</small>
+                    </button>
+                  </div>
+                  <input id="discard-file" class="visually-hidden" type="file" accept="image/*" onchange="App.onDiscardPhoto(this)" />
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary discard-confirm" id="discard-confirm" onclick="App.confirmDiscard()" disabled>Confirm</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -888,8 +945,8 @@
       crossorigin=""
     ></script>
     <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
-    <script src="nav.js?v=20261010v"></script>
-    <script src="app.js?v=20261010v"></script>
+    <script src="nav.js?v=20261019q"></script>
+    <script src="app.js?v=20261019u"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

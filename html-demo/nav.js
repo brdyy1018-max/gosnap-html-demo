@@ -201,17 +201,12 @@ function roadNameFromTask(task) {
   return '';
 }
 
-function maneuverIcon(type) {
-  const paths = {
-    left: 'M14 5 6 12l8 7',
-    right: 'M10 5l8 7-8 7',
-    straight: 'M12 19V6M7 10l5-5 5 5',
-    uturn: 'M8 8h6a4 4 0 010 8H9M8 8 5 11l3 3',
-    depart: 'M12 4v16M8 8l4-4 4 4',
-    arrive: 'M12 20s6-5.2 6-10a6 6 0 10-12 0c0 4.8 6 10 6 10z',
-  };
-  const d = paths[type] || paths.straight;
-  return `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+function maneuverArrow(type) {
+  if (type === 'uturn') {
+    return `<svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true"><path fill="currentColor" d="M34 8h-8a14 14 0 0 0-14 14v6h-8l12 14 12-14h-8v-6a6 6 0 0 1 6-6h8V8z"/></svg>`;
+  }
+  const rot = { left: -90, right: 90, arrive: 180 }[type] || 0;
+  return `<svg viewBox="0 0 48 48" width="42" height="42" style="transform:rotate(${rot}deg)" aria-hidden="true"><path fill="currentColor" d="M24 3.5 39.5 20H31v24.5H17V20H8.5z"/></svg>`;
 }
 
 function maneuverLabel(type) {
@@ -463,7 +458,10 @@ function updateNavBanner() {
   const el = document.getElementById('nav-banner');
   if (!el) return;
   const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
-  const show = (state.mapMode === 'recording' || state.mapMode === 'enroute') && task && state.userPos;
+  const show =
+    (state.mapMode === 'recording' || (state.mapMode === 'enroute' && !state.enrouteArrived)) &&
+    task &&
+    state.userPos;
   el.classList.toggle('hidden', !show);
   if (!show) return;
   if (state.mapMode === 'enroute') {
@@ -472,15 +470,12 @@ function updateNavBanner() {
     const arrived = !!state.enrouteArrived || (m.type === 'arrive' && m.remain < 40);
     const type = arrived ? 'arrive' : (m.type === 'arrive' ? 'straight' : m.type);
     const near = arrived || (m.remain < 80 && type !== 'depart' && type !== 'straight');
-    el.className = `nav-banner${near ? ' is-near' : ''}`;
-    const action = arrived ? 'Arrive at start' : maneuverLabel(type);
-    el.innerHTML = `<div class="nav-turn">${maneuverIcon(arrived ? 'arrive' : type)}</div>
+    el.className = `nav-banner is-transit${near ? ' is-near' : ''}`;
+    el.innerHTML = `<div class="nav-turn">${maneuverArrow(arrived ? 'arrive' : type)}</div>
       <div class="nav-copy">
-        <div class="nav-action">${action}</div>
-        <div class="nav-dist">${arrived ? 'Start recording' : formatNavMeters(m.remain)}</div>
-        <div class="nav-road">To next task start</div>
+        <div class="nav-dist">${arrived ? 'Here' : formatNavMeters(m.remain)}</div>
       </div>`;
-    syncEnrouteSheet();
+    if (window.App) App.syncNextDestination();
     return;
   }
   const pts = getTaskLatLngs(task);
@@ -491,13 +486,10 @@ function updateNavBanner() {
   }
   const m = resolveManeuver(task, state.navDistanceM || 0);
   const near = m.remain < 80 && m.type !== 'depart' && m.type !== 'straight';
-  const road = roadNameFromTask(task);
-  el.className = `nav-banner${near ? ' is-near' : ''}`;
-  el.innerHTML = `<div class="nav-turn">${maneuverIcon(m.type)}</div>
+  el.className = `nav-banner is-transit${near ? ' is-near' : ''}`;
+  el.innerHTML = `<div class="nav-turn">${maneuverArrow(m.type)}</div>
     <div class="nav-copy">
-      <div class="nav-action">${maneuverLabel(m.type)}</div>
       <div class="nav-dist">${formatNavMeters(m.remain)}</div>
-      ${road ? `<div class="nav-road">${road}</div>` : ''}
     </div>`;
 }
 
@@ -515,7 +507,7 @@ function updateOrientButton() {
 function updateRecenterButton() {}
 
 function navPaused() {
-  return !!(state.recordingPausedByAlert || state.shiftPaused || state.captureRestMode || document.visibilityState === 'hidden');
+  return !!(state.recordingPausedByAlert || state.shiftPaused || state.captureRestMode || state.discardSheetOpen || document.visibilityState === 'hidden');
 }
 
 function canAutoRecenter() {
@@ -593,6 +585,29 @@ function followCamera(animate) {
   syncCourseMarkerRotation();
 }
 
+const NAV_LEG_MS = 5000;
+const NAV_TICK_MS = 50;
+
+function resetNavLegClock() {
+  state.navLegT0 = performance.now();
+  state.navLegPauseT0 = 0;
+}
+
+function navLegAlong(total) {
+  if (!state.navLegT0) resetNavLegClock();
+  if (navPaused()) {
+    if (!state.navLegPauseT0) state.navLegPauseT0 = performance.now();
+    const frozen = Math.max(0, state.navLegPauseT0 - state.navLegT0);
+    return Math.min(total, total * (frozen / NAV_LEG_MS));
+  }
+  if (state.navLegPauseT0) {
+    state.navLegT0 += performance.now() - state.navLegPauseT0;
+    state.navLegPauseT0 = 0;
+  }
+  const elapsed = Math.max(0, performance.now() - state.navLegT0);
+  return Math.min(total, total * (elapsed / NAV_LEG_MS));
+}
+
 function stepNavSimulation() {
   if (state.mapMode !== 'recording') return;
   const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
@@ -600,10 +615,12 @@ function stepNavSimulation() {
   const pts = getTaskLatLngs(task);
   taskManeuvers(task);
   const total = task._routeLen || 0;
-  if (!navPaused() && (state.navDistanceM || 0) < total - 1) {
-    const step = Math.min(2, Math.max(0, total - (state.navDistanceM || 0)));
-    state.navDistanceM = Math.min(total, (state.navDistanceM || 0) + step);
-    state.userSpeed = step / 0.18;
+  if ((state.navDistanceM || 0) < total - 1) {
+    const along = navLegAlong(total);
+    if (!navPaused()) {
+    const step = Math.max(0, along - (state.navDistanceM || 0));
+    state.navDistanceM = along;
+    state.userSpeed = step / (NAV_TICK_MS / 1000);
     const sample = pointAlong(pts, state.navDistanceM);
     if (sample) {
       const guide = guideBearing(pts, state.navDistanceM);
@@ -612,6 +629,7 @@ function stepNavSimulation() {
         ? state.guideBearing
         : lerpAngle(state.userHeadingTrusted, state.guideBearing, 0.8);
       state.userPos = { lat: sample.lat, lng: sample.lng };
+    }
     }
   } else {
     state.userSpeed = 0;
@@ -682,6 +700,7 @@ function beginNavSimulation() {
   updateNavBanner();
   if (window.App) App.renderMapTasks({ skipFit: true });
   followCamera(true);
+  resetNavLegClock();
   const loop = () => {
     if (state.navSimGen !== gen || state.mapMode !== 'recording') return;
     stepNavSimulation();
@@ -691,9 +710,9 @@ function beginNavSimulation() {
       if (window.App) App.arriveTaskEnd();
       return;
     }
-    state.navSimTimer = setTimeout(loop, 180);
+    state.navSimTimer = setTimeout(loop, NAV_TICK_MS);
   };
-  state.navSimTimer = setTimeout(loop, 180);
+  state.navSimTimer = setTimeout(loop, NAV_TICK_MS);
 }
 
 function syncEnrouteSheet() {
@@ -724,9 +743,11 @@ function stepTransit() {
   if (state.mapMode !== 'enroute') return;
   const pts = normPts(state.transitPts);
   const total = routeCumul(pts).pop() || 0;
-  if (!state.enrouteArrived && !navPaused() && total > 1 && (state.transitDistanceM || 0) < total) {
-    const step = Math.min(2, total - (state.transitDistanceM || 0));
-    state.transitDistanceM = Math.min(total, (state.transitDistanceM || 0) + step);
+  if (!state.enrouteArrived && total > 1 && (state.transitDistanceM || 0) < total) {
+    const along = navLegAlong(total);
+    if (!navPaused()) {
+    const step = Math.max(0, along - (state.transitDistanceM || 0));
+    state.transitDistanceM = along;
     const sample = pointAlong(pts, state.transitDistanceM);
     if (sample) {
       const guide = guideBearing(pts, state.transitDistanceM || 0);
@@ -735,7 +756,7 @@ function stepTransit() {
         ? state.guideBearing
         : lerpAngle(state.userHeadingTrusted, state.guideBearing, 0.8);
       state.userPos = { lat: sample.lat, lng: sample.lng };
-      state.userSpeed = step / 0.18;
+      state.userSpeed = step / (NAV_TICK_MS / 1000);
     }
     if (state.transitDistanceM >= total - 1) {
       state.transitDistanceM = total;
@@ -746,6 +767,7 @@ function stepTransit() {
       if (typeof clearTransitLayers === 'function') clearTransitLayers();
       state.transitPts = null;
     }
+    }
   }
   refreshTransitGraphics();
   updateUserMarker();
@@ -754,17 +776,18 @@ function stepTransit() {
 }
 
 function startTransitLoop(task, gen) {
+  resetNavLegClock();
   const loop = () => {
     if (state.navSimGen !== gen || state.mapMode !== 'enroute') return;
     stepTransit();
     if (state.navSimGen !== gen || state.mapMode !== 'enroute') return;
     if (state.enrouteArrived && window.App) {
-      App.startPushedRecording();
+      App.onTransitArrived();
       return;
     }
-    state.navSimTimer = setTimeout(loop, 180);
+    state.navSimTimer = setTimeout(loop, NAV_TICK_MS);
   };
-  state.navSimTimer = setTimeout(loop, 180);
+  state.navSimTimer = setTimeout(loop, NAV_TICK_MS);
   if (state.mapCameraMode === 'route-overview') fitTransitInSafeArea(task);
   if (window.App) App.renderMapTasks({ skipFit: true });
   updateNavBanner();
@@ -953,6 +976,7 @@ function isUnclaimedTask(t) {
     !t.overview_only &&
     t.display_state !== 'completed_local' &&
     t.display_state !== 'completed' &&
+    t.display_state !== 'discarded' &&
     !isClaimedTask(t)
   );
 }

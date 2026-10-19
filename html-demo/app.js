@@ -212,7 +212,7 @@ const TASK_SHEET_NAV_ICON =
 const TASK_SHEET_COPY_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
 const TASK_SHEET_RELEASE_ICON =
-  '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 19h12M9 19V8.5l5.2-5.2a1 1 0 011.4 0l3.1 3.1a1 1 0 010 1.4L14 13.5V19" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 14.5h6" stroke-linecap="round"/></svg>';
+  '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3.2 20.2 12 12 20.8 3.8 12Z" stroke-linejoin="round"/></svg>';
 
 const RECORDING_ALERTS = {
   device_disconnect: {
@@ -248,14 +248,33 @@ function renderTaskCardCloseBtn(handler) {
 
 function renderTaskSheetLinks(t) {
   return `<div class="task-sheet-links">
-    <button type="button" class="task-sheet-link" onclick="toast('Opening Google Maps…')">
+    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); toast('Opening Google Maps…')">
       ${TASK_SHEET_NAV_ICON}
       <span>Navigate</span>
     </button>
-    <button type="button" class="task-sheet-link" onclick="App.copyTicketId('${t.ticket_id || t.task_id}')">
+    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); App.copyTicketId('${t.ticket_id || t.task_id}')">
       ${TASK_SHEET_COPY_ICON}
       <span>Copy ID</span>
     </button>
+  </div>`;
+}
+
+function beginCardVisible() {
+  const sheet = document.getElementById('task-sheet');
+  if (!sheet || sheet.classList.contains('hidden')) return false;
+  if (state.mapMode === 'next' || state.mapMode === 'recording') return false;
+  if (state.mapMode === 'enroute' && !state.enrouteArrived) return false;
+  const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+  return !!(task && isClaimedTask(task));
+}
+
+function renderStartActions(task, label = 'Begin', action = `App.beginAcceptedTask('${task.task_id}')`) {
+  return `<div class="task-sheet-actions split">
+    <button type="button" class="task-release-btn" onclick="event.stopPropagation(); App.releaseTask('${task.task_id}')">
+      ${TASK_SHEET_RELEASE_ICON}
+      <span>Release</span>
+    </button>
+    <button type="button" class="task-sheet-begin" onclick="event.stopPropagation(); ${action}">${label}</button>
   </div>`;
 }
 
@@ -271,6 +290,7 @@ const state = {
   taskDateSelected: null,
   selectedRecordId: null,
   selectedTaskId: null,
+  claimDeckKeptIds: [],
   dismissedRecordIds: [],
   mapMode: 'idle', // idle | overview | navigating | enroute | recording | completing | review
   transitPts: null,
@@ -279,6 +299,7 @@ const state = {
   enrouteArrived: false,
   autoFinishing: false,
   enrouteStartedBackground: false,
+  nextDestHidden: false,
   mapCameraMode: 'follow-north',
   routeOverviewHold: false,
   mapBearing: 0,
@@ -304,6 +325,7 @@ const state = {
   backgroundRecInterval: null,
   shiftActive: false,
   shiftPaused: false,
+  collectMode: 'manual',
   shiftDistanceKm: 0,
   shiftDemoTimers: [],
   shiftStartPending: false,
@@ -529,6 +551,7 @@ const state = {
 };
 
 function getTaskLifecycle(t) {
+  if (t.display_state === 'discarded') return 'discarded';
   if (t.display_state === 'completed_local') return 'completed';
   if (t.display_state === 'claimed') return 'claimed';
   return 'unclaimed';
@@ -910,10 +933,13 @@ function updateMapStatsWidgets() {
     if (tasksEl) tasksEl.textContent = `${todayMetrics.tasks}/${todayMetrics.targets.tasks}`;
     el.classList.toggle('is-compact-top', ctx.compactTop);
     if (el.classList.contains('map-shift-panel')) {
+      const sessionOn = state.shiftActive || state.shiftPaused;
       el.classList.toggle('is-on-shift', state.shiftActive && !state.shiftPaused);
       el.classList.toggle('is-paused', state.shiftPaused);
+      el.classList.toggle('is-session', sessionOn);
       el.classList.toggle('is-recording', state.backgroundRecording);
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
+      el.classList.toggle('is-auto-running', state.collectMode === 'auto' && (state.shiftActive || state.shiftPaused));
       const btn = el.querySelector('.map-shift-btn');
       const actionEl = el.querySelector('[data-shift-action]');
       const recDot = el.querySelector('[data-shift-rec-dot]');
@@ -922,19 +948,14 @@ function updateMapStatsWidgets() {
           'aria-pressed',
           state.shiftActive || state.shiftPaused ? 'true' : 'false'
         );
-        if (state.shiftPaused) {
-          btn.setAttribute('aria-label', 'Resume shift');
-        } else if (state.shiftActive) {
-          btn.setAttribute('aria-label', 'Pause shift');
-        } else {
-          btn.setAttribute('aria-label', 'Start shift');
-        }
+        btn.setAttribute('aria-label', sessionOn ? 'Stop collecting' : 'Start collecting');
       }
-      if (actionEl) {
-        if (state.shiftPaused) actionEl.textContent = 'Resume';
-        else if (state.shiftActive) actionEl.textContent = 'Pause';
-        else actionEl.textContent = 'Start';
-      }
+      if (actionEl) actionEl.textContent = sessionOn ? 'Stop' : 'Start';
+      el.querySelectorAll('[data-collect-mode]').forEach((modeBtn) => {
+        modeBtn.classList.toggle('is-on', modeBtn.dataset.collectMode === state.collectMode);
+        modeBtn.disabled = sessionOn;
+      });
+      el.querySelector('.collect-mode')?.classList.toggle('is-locked', sessionOn);
       if (recDot) recDot.classList.toggle('hidden', !state.backgroundRecording);
       if (distLabel) distLabel.textContent = 'Total Distance';
     }
@@ -953,6 +974,10 @@ function startBackgroundRecording() {
   state.backgroundRecInterval = setInterval(() => {
     state.backgroundRecSeconds += 1;
     if (state.shiftActive) state.shiftDistanceKm += 0.012;
+    if (state.mapMode === 'enroute' && !state.enrouteArrived) {
+      const time = document.getElementById('capture-time');
+      if (time) time.textContent = formatTime(state.backgroundRecSeconds);
+    }
     updateBackgroundRecordingBar();
     updateMapStatsWidgets();
   }, 1000);
@@ -975,10 +1000,18 @@ function beginShiftRecording() {
   startBackgroundRecording();
 }
 
+function seedCollectUser() {
+  if (state.userPos) return;
+  const seed = listNearbyOpenTasks(null)[0];
+  const start = seed ? getTaskEndpoints(seed.task).start : null;
+  if (start) state.userPos = { lat: start.lat - 0.0022, lng: start.lng };
+}
+
 function startShift() {
   if (state.shiftActive) return;
   beginShiftRecording();
-  runShiftDemo();
+  if (state.collectMode === 'auto') beginAutoCollect();
+  else runShiftDemo();
 }
 
 function stopShift() {
@@ -1119,11 +1152,7 @@ function resetShiftDemoTask(taskId = SHIFT_DEMO_TASK_ID) {
 
 function runShiftDemo() {
   clearShiftDemo();
-  if (!state.userPos) {
-    const seed = listNearbyOpenTasks(null)[0];
-    const start = seed ? getTaskEndpoints(seed.task).start : null;
-    if (start) state.userPos = { lat: start.lat - 0.0022, lng: start.lng };
-  }
+  seedCollectUser();
   const nearby = listNearbyOpenTasks(state.userPos);
   state.selectedTaskId = nearby[0]?.task.task_id || null;
   state.mapMode = 'next';
@@ -1140,6 +1169,46 @@ function runShiftDemo() {
   App.renderNextTaskDeck();
   App.renderMapTasks();
   App.updateMapChrome();
+  toast(nearby.length ? 'Pick a task, then tap Navigate' : 'No claimed tasks nearby');
+}
+
+const AT_TASK_START_M = 50;
+
+function beginAutoCollect() {
+  clearShiftDemo();
+  seedCollectUser();
+  const nearby = listNearbyOpenTasks(state.userPos);
+  state.continuousCollect = true;
+  state.recSeconds = 0;
+  clearInterval(state.recInterval);
+  state.recInterval = null;
+  state.transitPts = null;
+  state.enrouteArrived = false;
+  state.navFollow = false;
+  state.navDistanceM = 0;
+  state.cardRecording = false;
+  App.renderPushedTaskCard(null);
+  if (!nearby.length) {
+    state.mapMode = 'idle';
+    state.selectedTaskId = null;
+    if (state.screen !== 'map') App.go('map');
+    App.renderMapTasks();
+    App.updateMapChrome();
+    toast('No claimed tasks nearby');
+    return;
+  }
+  const nearest = nearby[0];
+  state.selectedTaskId = nearest.task.task_id;
+  if (nearest.distanceM <= AT_TASK_START_M) {
+    state.mapMode = 'enroute';
+    state.enrouteArrived = true;
+    if (state.screen !== 'map') App.go('map');
+    App.showArrivedTaskCard();
+    return;
+  }
+  state.mapMode = 'next';
+  if (state.screen !== 'map') App.go('map');
+  App.startNextNavigation(nearest.task.task_id);
 }
 
 function toast(msg) {
@@ -2297,14 +2366,16 @@ const App = {
 
     const driving = ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
     const overview = state.mapMode === 'overview';
+    const arrivedCard = state.mapMode === 'enroute' && state.enrouteArrived;
 
-    topChrome.classList.remove('hidden');
-    nav.classList.toggle('hidden', state.mapMode !== 'recording' && state.mapMode !== 'enroute');
-    captureSheet.classList.toggle('hidden', !driving);
-    mapFloats.classList.toggle('hidden', !driving);
+    const turnPinned = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !arrivedCard);
+    topChrome.classList.toggle('hidden', turnPinned);
+    nav.classList.toggle('hidden', arrivedCard || (state.mapMode !== 'recording' && state.mapMode !== 'enroute'));
+    captureSheet.classList.toggle('hidden', !driving || arrivedCard);
+    mapFloats.classList.toggle('hidden', !driving || arrivedCard);
 
     const pickingNext = state.mapMode === 'next' || state.mapMode === 'claim';
-    const hideSheet = (driving || !state.selectedTaskId) && !pickingNext;
+    const hideSheet = ((driving && !arrivedCard) || !state.selectedTaskId) && !pickingNext;
     sheet.classList.toggle('hidden', hideSheet);
 
     mapRail.classList.remove('hidden');
@@ -2317,11 +2388,14 @@ const App = {
     }
 
     document.getElementById('capture-enroute')?.classList.toggle('hidden', state.mapMode !== 'enroute');
-    document.querySelector('.capture-submit-row')?.classList.toggle('hidden', state.mapMode === 'enroute');
+    const turnHud = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !arrivedCard);
+    document.querySelector('.capture-submit-row')?.classList.toggle('hidden', arrivedCard);
+    document.getElementById('capture-submit')?.classList.toggle('hidden', turnHud);
+    document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || beginCardVisible()));
 
-    if (driving) {
+    if (driving && !arrivedCard) {
       renderCaptureControls();
-      const time = formatTime(state.recSeconds);
+      const time = formatTime(state.mapMode === 'enroute' ? state.backgroundRecSeconds : state.recSeconds);
       document.getElementById('capture-time').textContent = time;
       document.getElementById('capture-dot').classList.toggle('hidden', state.mapMode === 'navigating' && !state.recSeconds);
     }
@@ -2393,9 +2467,12 @@ const App = {
     updateRecenterButton();
     document.getElementById('screen-map')?.classList.toggle('is-recording', state.mapMode === 'recording');
     document.getElementById('screen-map')?.classList.toggle('is-enroute', state.mapMode === 'enroute');
+    document.getElementById('screen-map')?.classList.toggle('is-arrived', arrivedCard);
+    App.syncNextDestination();
   },
 
   tickRec() {
+    if (state.shiftPaused || state.discardSheetOpen) return;
     state.recSeconds++;
     const t = formatTime(state.recSeconds);
     const captureTime = document.getElementById('capture-time');
@@ -2601,7 +2678,7 @@ const App = {
       App.updateMapChrome();
       return;
     }
-    if (state.mapMode === 'claim' && unclaimed) {
+    if (state.mapMode === 'claim' && (unclaimed || state.claimDeckKeptIds.includes(taskId))) {
       state.selectedTaskId = taskId;
       App.markNextDeckCard(taskId);
       App.renderMapTasks();
@@ -2625,7 +2702,14 @@ const App = {
   closeTaskSheet() {
     state.selectedTaskId = null;
     resetBeginCaptureState();
+    if (state.mapMode === 'enroute' && state.enrouteArrived) {
+      state.mapMode = 'idle';
+      state.enrouteArrived = false;
+      clearTransitLayers();
+      state.transitPts = null;
+    }
     if (state.mapMode === 'review' || state.mapMode === 'claim') state.mapMode = 'idle';
+    state.claimDeckKeptIds = [];
     const sheet = document.getElementById('task-sheet');
     sheet?.classList.remove('is-next-deck', 'is-recommend');
     App.renderMapTasks();
@@ -2671,8 +2755,10 @@ const App = {
       const cls =
         status === 'rejected' ? 'is-failed' : status === 'approved' ? 'is-success' : '';
       actions = `<button type="button" class="btn btn-submitted task-sheet-accept ${cls}" disabled>${REVIEW_STATUS_LABELS[status] || REVIEW_STATUS_LABELS.awaiting}</button>`;
+    } else if (isClaimedTask(t)) {
+      actions = renderStartActions(t);
     } else {
-      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.startOverviewRecording()">Start recording</button>`;
+      actions = `<button type="button" class="btn btn-primary task-sheet-accept" onclick="App.acceptTask('${t.task_id}')">Accept</button>`;
     }
 
     sheet.innerHTML = `
@@ -2696,9 +2782,13 @@ const App = {
     if (!t || !t.claimed_by_me) return;
     t.display_state = 'unclaimed';
     t.claimed_by_me = false;
+    state.claimDeckKeptIds = state.claimDeckKeptIds.filter((x) => x !== id);
     resetBeginCaptureState();
+    state.selectedTaskId = id;
+    state.mapMode = 'claim';
     App.renderMapTasks();
     App.renderTaskSheet();
+    App.updateMapChrome();
     toast('Task released');
   },
 
@@ -2707,20 +2797,21 @@ const App = {
     if (!t || !isUnclaimedTask(t)) return;
     t.display_state = 'claimed';
     t.claimed_by_me = true;
-    if (state.mapMode === 'claim') {
-      const rest = listNearbyUnclaimedTasks(state.userPos);
-      if (!rest.length) {
-        state.mapMode = 'idle';
-        state.selectedTaskId = null;
-        document.getElementById('task-sheet')?.classList.remove('is-next-deck');
-      } else if (!rest.some((item) => item.task.task_id === state.selectedTaskId)) {
-        state.selectedTaskId = rest[0].task.task_id;
-      }
-    }
+    if (!state.claimDeckKeptIds.includes(id)) state.claimDeckKeptIds.push(id);
+    state.selectedTaskId = id;
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
     toast('Task accepted');
+  },
+
+  beginAcceptedTask(id) {
+    const t = state.mapTasks.find((x) => x.task_id === id);
+    if (!t || !isClaimedTask(t)) return;
+    state.selectedTaskId = id;
+    state.claimDeckKeptIds = [];
+    state.mapMode = 'idle';
+    App.startOverviewRecording();
   },
 
   openBegin() {
@@ -2873,7 +2964,7 @@ const App = {
     state.recSeconds = 0;
     clearInterval(state.recInterval);
     state.recInterval = setInterval(() => {
-      if (!state.cardRecording || state.mapMode !== 'enroute') return;
+      if (state.shiftPaused || !state.cardRecording || state.mapMode !== 'enroute') return;
       state.recSeconds += 1;
       App.syncCardRecordButton();
     }, 1000);
@@ -2969,6 +3060,10 @@ const App = {
     state.completeProximityRetried = false;
     state.completeButtonLoading = false;
     state.mapFreeBrowse = false;
+    if (state.collectMode === 'auto' && state.shiftActive) {
+      beginAutoCollect();
+      return;
+    }
     const nearby = listNearbyOpenTasks(state.userPos || getTaskEndpoints(t).end);
     if (nearby.length) {
       state.selectedTaskId = nearby[0].task.task_id;
@@ -3011,19 +3106,35 @@ const App = {
       listNearbyOpenTasks(state.userPos),
       'App.dismissRecommendation()',
       (task) => `App.startNextNavigation('${task.task_id}')`,
-      'Start'
+      'Navigate'
     );
   },
 
   renderClaimDeck() {
     const selected = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
     const anchor = state.userPos || (selected ? getTaskEndpoints(selected).start : null);
+    const unclaimed = listNearbyUnclaimedTasks(anchor);
+    const seen = new Set(unclaimed.map((item) => item.task.task_id));
+    const origin = (typeof normPt === 'function' ? normPt(anchor) : anchor) || state.userPos;
+    const kept = state.claimDeckKeptIds
+      .filter((id) => !seen.has(id))
+      .map((id) => {
+        const task = state.mapTasks.find((t) => t.task_id === id);
+        if (!task || !isClaimedTask(task)) return null;
+        const start = getTaskEndpoints(task).start;
+        const distanceM = origin && start && typeof haversineM === 'function' ? haversineM(origin, start) : 0;
+        return { task, distanceM };
+      })
+      .filter(Boolean);
     App.renderTaskDeck(
       'claim',
-      listNearbyUnclaimedTasks(anchor),
+      [...unclaimed, ...kept].sort((a, b) => a.distanceM - b.distanceM),
       'App.closeTaskSheet()',
-      (task) => `App.acceptTask('${task.task_id}')`,
-      'Accept'
+      (task) =>
+        isClaimedTask(task)
+          ? `App.beginAcceptedTask('${task.task_id}')`
+          : `App.acceptTask('${task.task_id}')`,
+      (task) => (isClaimedTask(task) ? 'Begin' : 'Accept')
     );
   },
 
@@ -3054,9 +3165,15 @@ const App = {
           </div>
           ${renderTaskBadges(task)}
           ${renderTaskSheetLinks(task)}
-          <div class="task-sheet-actions">
-            <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${actionCall(task)}">${actionLabel}</button>
-          </div>
+          ${
+            mode === 'next' && isClaimedTask(task)
+              ? renderStartActions(task, 'Navigate', `App.startNextNavigation('${task.task_id}')`)
+              : mode === 'claim' && isClaimedTask(task)
+              ? renderStartActions(task)
+              : `<div class="task-sheet-actions">
+            <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${actionCall(task)}">${typeof actionLabel === 'function' ? actionLabel(task) : actionLabel}</button>
+          </div>`
+          }
         </article>`;
       })
       .join('')}</div>`;
@@ -3120,6 +3237,8 @@ const App = {
     state.selectedTaskId = task.task_id;
     state.mapMode = 'enroute';
     state.navDistanceM = 0;
+    state.nextDestHidden = false;
+    state.enrouteArrived = false;
     state.enrouteStartedBackground = !state.backgroundRecording;
     startBackgroundRecording();
     const sheet = document.getElementById('task-sheet');
@@ -3128,11 +3247,11 @@ const App = {
       sheet.classList.add('hidden');
       sheet.innerHTML = '';
     }
-    App.renderPushedTaskCard(task);
+    App.renderPushedTaskCard(null);
     beginTransit(task);
     App.renderMapTasks({ skipFit: true });
     App.updateMapChrome();
-    toast('Navigation started');
+    toast(state.collectMode === 'auto' ? 'Heading to the nearest task' : 'Navigation started');
   },
 
   renderPushedTaskCard(task) {
@@ -3187,6 +3306,89 @@ const App = {
     syncEnrouteSheet();
   },
 
+  onTransitArrived() {
+    state.cardRecording = false;
+    App.renderPushedTaskCard(null);
+    App.showArrivedTaskCard();
+  },
+
+  showArrivedTaskCard() {
+    const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    const sheet = document.getElementById('task-sheet');
+    if (!task || !sheet) return;
+    state.enrouteArrived = true;
+    const start = getTaskEndpoints(task).start;
+    const distanceM = state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : 0;
+    const km = (distanceM / 1000).toFixed(1);
+    sheet.classList.remove('hidden', 'is-next-deck', 'is-recommend');
+    sheet.innerHTML = `
+      <div class="task-sheet-card">
+        <div class="task-sheet-head">
+          <div class="task-sheet-head-copy">
+            <h2 class="task-sheet-title">${getTaskSheetTitle(task)}</h2>
+            <p class="task-sheet-meta">${km} kilometers away from you | ${task.poi_address || ''}</p>
+          </div>
+          ${renderTaskCardCloseBtn('App.closeTaskSheet()')}
+        </div>
+        ${renderTaskBadges(task)}
+        ${renderTaskSheetLinks(task)}
+        ${renderStartActions(task)}
+      </div>
+    `;
+    App.renderPushedTaskCard(null);
+    App.updateMapChrome();
+    if (state.collectMode === 'auto' && state.shiftActive) App.continueAutoTask();
+  },
+
+  continueAutoTask() {
+    if (state.collectMode !== 'auto' || !state.shiftActive || state.autoAdvancing) return;
+    const id = state.selectedTaskId;
+    if (!id) return;
+    state.autoAdvancing = true;
+    document.querySelector('.task-sheet-begin')?.classList.add('is-auto-press');
+    setTimeout(() => {
+      state.autoAdvancing = false;
+      if (state.collectMode !== 'auto' || !state.shiftActive) return;
+      if (state.mapMode === 'recording' || state.mapMode === 'completing') return;
+      if (state.selectedTaskId !== id) return;
+      App.beginAcceptedTask(id);
+    }, 480);
+  },
+
+  dismissNextDest() {
+    state.nextDestHidden = true;
+    App.syncNextDestination();
+  },
+
+  syncNextDestination() {
+    const el = document.getElementById('next-dest');
+    if (!el) return;
+    const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+    const show = state.mapMode === 'enroute' && !state.enrouteArrived && !state.nextDestHidden && !!task;
+    el.classList.toggle('hidden', !show);
+    if (!show || !task) return;
+    const total = typeof routeCumul === 'function' ? (routeCumul(state.transitPts || []).pop() || 0) : 0;
+    const remain = Math.max(0, total - (state.transitDistanceM || 0));
+    const dist = document.getElementById('next-dest-dist');
+    const name = document.getElementById('next-dest-name');
+    if (dist) dist.textContent = `Next Destination: ${typeof formatNavMeters === 'function' ? formatNavMeters(remain) : ''}`;
+    if (name) name.textContent = getTaskSheetTitle(task);
+  },
+
+  setCollectMode(mode) {
+    if (state.shiftActive || state.shiftPaused) return;
+    if (mode !== 'manual' && mode !== 'auto') return;
+    state.collectMode = mode;
+    updateMapStatsWidgets();
+  },
+
+  toggleShiftPause() {
+    if (!state.shiftActive && !state.shiftPaused) return;
+    if (state.shiftPaused) resumeShift();
+    else pauseShift();
+    App.updateMapChrome();
+  },
+
   dismissRecommendation() {
     const stopTransitBackground = state.mapMode === 'enroute' && state.enrouteStartedBackground;
     clearInterval(state.recInterval);
@@ -3217,6 +3419,140 @@ const App = {
     }
     App.renderMapTasks();
     App.updateMapChrome();
+  },
+
+  openDiscardSheet() {
+    const onRoute = state.mapMode === 'recording' || state.mapMode === 'enroute';
+    if (!onRoute && !beginCardVisible()) return;
+    state.discardSheetOpen = true;
+    state.discardPhotos = [];
+    document.querySelectorAll('input[name="discard-reason"]').forEach((input) => {
+      input.checked = false;
+    });
+    const note = document.getElementById('discard-note');
+    if (note) note.value = '';
+    App.onDiscardNote();
+    App.onDiscardReason();
+    App.renderDiscardPhotos();
+    document.getElementById('discard-layer')?.classList.remove('hidden');
+  },
+
+  closeDiscardSheet() {
+    state.discardSheetOpen = false;
+    document.getElementById('discard-layer')?.classList.add('hidden');
+  },
+
+  onDiscardReason() {
+    const picked = document.querySelector('input[name="discard-reason"]:checked');
+    document.getElementById('discard-check')?.classList.toggle('hidden', !picked);
+    const confirm = document.getElementById('discard-confirm');
+    if (confirm) confirm.disabled = !picked;
+  },
+
+  onDiscardNote() {
+    const note = document.getElementById('discard-note');
+    const count = document.getElementById('discard-count');
+    if (count) count.textContent = `${note?.value.length || 0}/300`;
+  },
+
+  onDiscardPhoto(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    if (!state.discardPhotos) state.discardPhotos = [];
+    if (state.discardPhotos.length >= 3) return;
+    state.discardPhotos.push(URL.createObjectURL(file));
+    App.renderDiscardPhotos();
+  },
+
+  removeDiscardPhoto(index) {
+    const url = state.discardPhotos[index];
+    if (url) URL.revokeObjectURL(url);
+    state.discardPhotos.splice(index, 1);
+    App.renderDiscardPhotos();
+  },
+
+  renderDiscardPhotos() {
+    const wrap = document.getElementById('discard-photos');
+    if (!wrap) return;
+    const photos = state.discardPhotos || [];
+    const thumbs = photos
+      .map(
+        (url, index) =>
+          `<span class="discard-thumb"><img src="${url}" alt="" /><button type="button" onclick="App.removeDiscardPhoto(${index})" aria-label="Remove photo">×</button></span>`
+      )
+      .join('');
+    const add =
+      photos.length >= 3
+        ? ''
+        : `<button type="button" class="discard-add" onclick="document.getElementById('discard-file').click()"><span>+</span><small>Up to three</small></button>`;
+    wrap.innerHTML = thumbs + add;
+  },
+
+  confirmDiscard() {
+    if (!document.querySelector('input[name="discard-reason"]:checked')) return;
+    App.closeDiscardSheet();
+    App.discardRecording();
+  },
+
+  discardRecording() {
+    const onRoute = state.mapMode === 'recording' || state.mapMode === 'enroute';
+    const fromBeginCard = beginCardVisible();
+    if (!onRoute && !fromBeginCard) return;
+    const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    if (task) {
+      task.display_state = 'discarded';
+      task.claimed_by_me = false;
+    }
+    state.claimDeckKeptIds = (state.claimDeckKeptIds || []).filter((id) => id !== state.selectedTaskId);
+    if (!onRoute) {
+      const wasClaim = state.mapMode === 'claim';
+      state.selectedTaskId = null;
+      state.enrouteArrived = false;
+      if (wasClaim) {
+        App.renderClaimDeck();
+      } else if (state.shiftActive || state.shiftPaused || state.continuousCollect) {
+        const remaining = listNearbyOpenTasks(state.userPos);
+        state.mapMode = 'next';
+        state.selectedTaskId = remaining[0]?.task.task_id || null;
+        App.renderNextTaskDeck();
+      } else {
+        state.mapMode = 'idle';
+        const sheet = document.getElementById('task-sheet');
+        if (sheet) {
+          sheet.classList.add('hidden');
+          sheet.innerHTML = '';
+        }
+      }
+      App.renderMapTasks();
+      App.updateMapChrome();
+      toast('Task discarded');
+      return;
+    }
+    clearInterval(state.recInterval);
+    state.recInterval = null;
+    stopNavSimulation();
+    clearTransitLayers();
+    state.transitPts = null;
+    state.recSeconds = 0;
+    state.navDistanceM = 0;
+    state.transitDistanceM = 0;
+    state.navFollow = false;
+    state.cardRecording = false;
+    state.captureRestMode = false;
+    state.enrouteArrived = false;
+    state.enrouteStartedBackground = false;
+    state.mapFreeBrowse = false;
+    state.mapBearingMode = 'north';
+    if (state.map && typeof state.map.setBearing === 'function') state.map.setBearing(0);
+    const remaining = listNearbyOpenTasks(state.userPos);
+    state.mapMode = 'next';
+    state.selectedTaskId = remaining[0]?.task.task_id || null;
+    App.renderPushedTaskCard(null);
+    App.renderNextTaskDeck();
+    App.renderMapTasks();
+    App.updateMapChrome();
+    toast(remaining.length ? 'Task discarded' : 'Task discarded. No claimed tasks left');
   },
 
   exitCapture() {
