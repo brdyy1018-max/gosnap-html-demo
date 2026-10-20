@@ -454,6 +454,35 @@ function updateUserMarker() {
   state.userMarker.setIcon(icon);
 }
 
+function syncNavDestBar(task, pts, maneuver, arrived) {
+  const bar = document.getElementById('nav-dest-bar');
+  if (!bar) return;
+  const show =
+    state.mapMode === 'enroute' &&
+    !state.enrouteArrived &&
+    !!task &&
+    !!state.userPos;
+  bar.classList.toggle('hidden', !show);
+  document.getElementById('screen-map')?.classList.toggle('has-nav-dest', show);
+  if (!show || !task) {
+    bar.innerHTML = '';
+    return;
+  }
+  const routePts = pts || state.transitPts || [];
+  const m = maneuver || resolveManeuverOn(routePts, state.transitDistanceM || 0);
+  const atStart = !!arrived || (m.type === 'arrive' && m.remain < 40);
+  const total = typeof routeCumul === 'function' ? (routeCumul(routePts).pop() || 0) : 0;
+  const remainToStart = Math.max(0, total - (state.transitDistanceM || 0));
+  const title = typeof getTaskSheetTitle === 'function' ? getTaskSheetTitle(task) : (task.poi_name || 'Task');
+  const showRemain =
+    !atStart && !(m.type === 'arrive' || Math.abs(m.remain - remainToStart) < 25);
+  bar.className = `nav-dest-bar${atStart ? ' is-here' : ''}`;
+  bar.innerHTML = `
+    <span class="nav-dest-kicker">${atStart ? 'At task start' : 'To task start'}</span>
+    <span class="nav-dest-name">${title}</span>
+    ${showRemain ? `<span class="nav-dest-remain">${formatNavMeters(remainToStart)}</span>` : ''}`;
+}
+
 function updateNavBanner() {
   const el = document.getElementById('nav-banner');
   if (!el) return;
@@ -463,7 +492,10 @@ function updateNavBanner() {
     task &&
     state.userPos;
   el.classList.toggle('hidden', !show);
-  if (!show) return;
+  if (!show) {
+    syncNavDestBar(null);
+    return;
+  }
   if (state.mapMode === 'enroute') {
     const pts = state.transitPts || [];
     const m = resolveManeuverOn(pts, state.transitDistanceM || 0);
@@ -475,9 +507,10 @@ function updateNavBanner() {
       <div class="nav-copy">
         <div class="nav-dist">${arrived ? 'Here' : formatNavMeters(m.remain)}</div>
       </div>`;
-    if (window.App) App.syncNextDestination();
+    syncNavDestBar(task, pts, m, arrived);
     return;
   }
+  syncNavDestBar(null);
   const pts = getTaskLatLngs(task);
   if (distanceToRouteM(state.userPos, pts) > 45) {
     el.className = 'nav-banner is-offroute';
@@ -585,7 +618,7 @@ function followCamera(animate) {
   syncCourseMarkerRotation();
 }
 
-const NAV_LEG_MS = 5000;
+const NAV_LEG_MS = 20000;
 const NAV_TICK_MS = 50;
 
 function resetNavLegClock() {
@@ -990,4 +1023,15 @@ function listNearbyUnclaimedTasks(anchor) {
       return { task, distanceM: origin ? haversineM(origin, start) : 0 };
     })
     .sort((a, b) => a.distanceM - b.distanceM);
+}
+
+/** Manual mode deck: nearest claimed + unclaimed, distance-sorted. */
+function listNearbyManualTasks(anchor) {
+  const origin = normPt(anchor) || normPt(state.userPos);
+  const byId = new Map();
+  listNearbyOpenTasks(origin).forEach((item) => byId.set(item.task.task_id, item));
+  listNearbyUnclaimedTasks(origin).forEach((item) => {
+    if (!byId.has(item.task.task_id)) byId.set(item.task.task_id, item);
+  });
+  return [...byId.values()].sort((a, b) => a.distanceM - b.distanceM);
 }

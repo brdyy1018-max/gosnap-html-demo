@@ -211,6 +211,8 @@ const TASK_SHEET_NAV_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 11 18-8-8 18-2-7-8-3Z" stroke-linejoin="round"/></svg>';
 const TASK_SHEET_COPY_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="14" rx="2"/><path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+const TASK_SHEET_SHARE_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3.2 20.2 12 12 20.8 3.8 12Z" stroke-linejoin="round"/><path d="M10.2 12h5.2M13.2 9.6 15.8 12l-2.6 2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const TASK_SHEET_RELEASE_ICON =
   '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3.2 20.2 12 12 20.8 3.8 12Z" stroke-linejoin="round"/></svg>';
 
@@ -247,14 +249,20 @@ function renderTaskCardCloseBtn(handler) {
 }
 
 function renderTaskSheetLinks(t) {
+  const id = t.task_id;
+  const ticketId = t.ticket_id || t.task_id;
   return `<div class="task-sheet-links">
-    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); toast('Opening Google Maps…')">
+    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); App.navigateToTask('${id}')">
       ${TASK_SHEET_NAV_ICON}
       <span>Navigate</span>
     </button>
-    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); App.copyTicketId('${t.ticket_id || t.task_id}')">
+    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); App.copyTicketId('${ticketId}')">
       ${TASK_SHEET_COPY_ICON}
       <span>Copy ID</span>
+    </button>
+    <button type="button" class="task-sheet-link task-sheet-link--share" onclick="event.stopPropagation(); App.shareDirections('${id}')">
+      ${TASK_SHEET_SHARE_ICON}
+      <span>Share Directions</span>
     </button>
   </div>`;
 }
@@ -300,7 +308,6 @@ const state = {
   taskFoldOpen: false,
   autoFinishing: false,
   enrouteStartedBackground: false,
-  nextDestHidden: false,
   mapCameraMode: 'follow-north',
   routeOverviewHold: false,
   mapBearing: 0,
@@ -923,6 +930,15 @@ function getMapStatsContext(screen) {
   return { distanceKm: state.shiftDistanceKm || 0, compactTop: false, mode: 'off' };
 }
 
+function collectModeLocked() {
+  if (state.screen !== 'map') return true;
+  return ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
+}
+
+function collectModeVisible() {
+  return state.screen === 'map' && !collectModeLocked();
+}
+
 function updateMapStatsWidgets() {
   const todayMetrics = computeTodayMetrics();
   document.querySelectorAll('.map-stats-widget').forEach((el) => {
@@ -935,36 +951,38 @@ function updateMapStatsWidgets() {
     el.classList.toggle('is-compact-top', ctx.compactTop);
     if (el.classList.contains('map-shift-panel')) {
       const sessionOn = state.shiftActive || state.shiftPaused;
+      const modeLocked = collectModeLocked();
       el.classList.toggle('is-on-shift', state.shiftActive && !state.shiftPaused);
       el.classList.toggle('is-paused', state.shiftPaused);
       el.classList.toggle('is-session', sessionOn);
       el.classList.toggle('is-recording', state.backgroundRecording);
       el.classList.toggle('is-task-overlay', ctx.mode === 'task');
-      el.classList.toggle('is-auto-running', state.collectMode === 'auto' && (state.shiftActive || state.shiftPaused));
-      const btn = el.querySelector('.map-shift-btn');
-      const actionEl = el.querySelector('[data-shift-action]');
+      el.classList.toggle('is-auto-running', state.collectMode === 'auto' && sessionOn);
+      el.classList.toggle('is-mode-hidden', !collectModeVisible());
       const recDot = el.querySelector('[data-shift-rec-dot]');
-      if (btn) {
-        btn.setAttribute(
-          'aria-pressed',
-          state.shiftActive || state.shiftPaused ? 'true' : 'false'
-        );
-        btn.setAttribute('aria-label', sessionOn ? 'Stop collecting' : 'Start collecting');
+      const modeGroup = el.querySelector('.collect-mode');
+      const autoSwitch = el.querySelector('#collect-auto-switch, .collect-auto-switch');
+      const autoOn = state.collectMode === 'auto';
+      modeGroup?.classList.toggle('hidden', !collectModeVisible());
+      modeGroup?.classList.toggle('is-locked', modeLocked);
+      if (autoSwitch) {
+        autoSwitch.classList.toggle('is-on', autoOn);
+        autoSwitch.setAttribute('aria-pressed', String(autoOn));
+        autoSwitch.disabled = modeLocked || !collectModeVisible();
       }
-      if (actionEl) actionEl.textContent = sessionOn ? 'Stop' : 'Start';
-      el.querySelectorAll('[data-collect-mode]').forEach((modeBtn) => {
-        modeBtn.classList.toggle('is-on', modeBtn.dataset.collectMode === state.collectMode);
-        modeBtn.disabled = sessionOn;
-      });
-      el.querySelector('.collect-mode')?.classList.toggle('is-locked', sessionOn);
-      if (recDot) recDot.classList.toggle('hidden', !state.backgroundRecording);
-      if (distLabel) distLabel.textContent = 'Total Distance';
+      if (recDot) recDot.classList.toggle('hidden', !isCaptureCounting());
+      if (distLabel) distLabel.textContent = 'Distance';
     }
   });
 }
 
 function updateBackgroundRecordingBar() {
   updateMapStatsWidgets();
+}
+
+function isCaptureCounting() {
+  if (state.shiftPaused || state.discardSheetOpen) return false;
+  return state.mapMode === 'recording' || !!state.cardRecording;
 }
 
 function startBackgroundRecording() {
@@ -974,11 +992,8 @@ function startBackgroundRecording() {
   clearInterval(state.backgroundRecInterval);
   state.backgroundRecInterval = setInterval(() => {
     state.backgroundRecSeconds += 1;
-    if (state.shiftActive) state.shiftDistanceKm += 0.012;
-    if (state.mapMode === 'enroute' && !state.enrouteArrived) {
-      const time = document.getElementById('capture-time');
-      if (time) time.textContent = formatTime(state.backgroundRecSeconds);
-    }
+    // Distance only ticks while actively recording (task route or enroute take).
+    if (state.shiftActive && isCaptureCounting()) state.shiftDistanceKm += 0.012;
     updateBackgroundRecordingBar();
     updateMapStatsWidgets();
   }, 1000);
@@ -1128,6 +1143,9 @@ function enterMapScreen() {
     const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
     if (task) requestAnimationFrame(() => fitTaskWithNeighbors(task));
   }
+  if (state.collectMode === 'manual' && !collectModeLocked() && state.mapMode === 'idle') {
+    showManualRecommend({ quiet: true });
+  }
 }
 
 function clearShiftDemo() {
@@ -1151,13 +1169,17 @@ function resetShiftDemoTask(taskId = SHIFT_DEMO_TASK_ID) {
   t.distance_km = 0.8;
 }
 
-function runShiftDemo() {
+function showManualRecommend(options = {}) {
   clearShiftDemo();
   seedCollectUser();
-  const nearby = listNearbyOpenTasks(state.userPos);
+  const nearby =
+    typeof listNearbyManualTasks === 'function'
+      ? listNearbyManualTasks(state.userPos)
+      : listNearbyOpenTasks(state.userPos);
+  state.collectMode = 'manual';
   state.selectedTaskId = nearby[0]?.task.task_id || null;
   state.mapMode = 'next';
-  state.continuousCollect = true;
+  state.continuousCollect = false;
   state.recSeconds = 0;
   clearInterval(state.recInterval);
   state.recInterval = null;
@@ -1165,12 +1187,20 @@ function runShiftDemo() {
   state.enrouteArrived = false;
   state.navFollow = false;
   state.navDistanceM = 0;
+  state.taskFoldOpen = false;
   if (state.screen !== 'map') App.go('map');
   App.renderPushedTaskCard(null);
   App.renderNextTaskDeck();
   App.renderMapTasks();
   App.updateMapChrome();
-  toast(nearby.length ? 'Pick a task, then tap Begin' : 'No claimed tasks nearby');
+  updateMapStatsWidgets();
+  if (!options.quiet) {
+    toast(nearby.length ? 'Nearby tasks ready — Accept or Begin' : 'No nearby tasks');
+  }
+}
+
+function runShiftDemo() {
+  showManualRecommend();
 }
 
 const AT_TASK_START_M = 50;
@@ -1201,10 +1231,9 @@ function beginAutoCollect() {
   const nearest = nearby[0];
   state.selectedTaskId = nearest.task.task_id;
   if (nearest.distanceM <= AT_TASK_START_M) {
-    state.mapMode = 'enroute';
-    state.enrouteArrived = true;
     if (state.screen !== 'map') App.go('map');
-    App.showArrivedTaskCard();
+    // Auto: skip Begin card and start the task immediately.
+    App.beginAcceptedTask(nearest.task.task_id);
     return;
   }
   state.mapMode = 'next';
@@ -2390,8 +2419,20 @@ const App = {
 
     document.getElementById('capture-enroute')?.classList.toggle('hidden', state.mapMode !== 'enroute');
     const turnHud = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !arrivedCard);
+    const enrouteDrive = state.mapMode === 'enroute' && !arrivedCard;
+    const enrouteLive = enrouteDrive && !!state.cardRecording;
+    // Enroute take is auto-only — no Start / Submit controls for the user.
+    const canSubmit = state.mapMode === 'recording' || state.mapMode === 'completing';
     document.querySelector('.capture-submit-row')?.classList.toggle('hidden', arrivedCard);
-    document.getElementById('capture-submit')?.classList.toggle('hidden', turnHud);
+    document.getElementById('capture-start-record')?.classList.toggle('hidden', true);
+    const submitBtn = document.getElementById('capture-submit');
+    submitBtn?.classList.toggle('hidden', !canSubmit);
+    if (submitBtn) {
+      const loading = state.mapMode === 'completing' && !!state.completeButtonLoading;
+      submitBtn.disabled = loading;
+      submitBtn.classList.toggle('is-loading', loading);
+      submitBtn.textContent = loading ? 'Submitting…' : 'Submit';
+    }
     document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || beginCardVisible()));
     const foldBtn = document.getElementById('map-task-fold');
     const foldCard = document.getElementById('task-fold-card');
@@ -2400,13 +2441,20 @@ const App = {
     foldBtn?.classList.toggle('is-open', !!state.taskFoldOpen);
     foldBtn?.setAttribute('aria-expanded', String(!!state.taskFoldOpen));
     foldCard?.classList.toggle('hidden', !turnHud || !state.taskFoldOpen);
+    document.getElementById('screen-map')?.classList.toggle('is-task-fold-open', !!(turnHud && state.taskFoldOpen));
     if (turnHud && state.taskFoldOpen) App.renderTaskFoldCard();
 
     if (driving && !arrivedCard) {
       renderCaptureControls();
-      const time = formatTime(state.mapMode === 'enroute' ? state.backgroundRecSeconds : state.recSeconds);
-      document.getElementById('capture-time').textContent = time;
-      document.getElementById('capture-dot').classList.toggle('hidden', state.mapMode === 'navigating' && !state.recSeconds);
+      const liveSecs =
+        state.mapMode === 'recording' || state.mapMode === 'completing' || enrouteLive
+          ? state.recSeconds
+          : 0;
+      document.getElementById('capture-time').textContent = formatTime(liveSecs);
+      document.getElementById('capture-dot')?.classList.toggle(
+        'hidden',
+        !(state.mapMode === 'recording' || enrouteLive)
+      );
     }
 
     const alertModal = document.getElementById('modal-recording-alert');
@@ -2477,7 +2525,9 @@ const App = {
     document.getElementById('screen-map')?.classList.toggle('is-recording', state.mapMode === 'recording');
     document.getElementById('screen-map')?.classList.toggle('is-enroute', state.mapMode === 'enroute');
     document.getElementById('screen-map')?.classList.toggle('is-arrived', arrivedCard);
-    App.syncNextDestination();
+    if (collectModeLocked()) {
+      document.getElementById('modal-auto-start')?.classList.remove('show');
+    }
   },
 
   tickRec() {
@@ -2794,7 +2844,8 @@ const App = {
     state.claimDeckKeptIds = state.claimDeckKeptIds.filter((x) => x !== id);
     resetBeginCaptureState();
     state.selectedTaskId = id;
-    state.mapMode = 'claim';
+    if (state.collectMode === 'manual' && !collectModeLocked()) state.mapMode = 'next';
+    else state.mapMode = 'claim';
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2808,6 +2859,9 @@ const App = {
     t.claimed_by_me = true;
     if (!state.claimDeckKeptIds.includes(id)) state.claimDeckKeptIds.push(id);
     state.selectedTaskId = id;
+    if (state.collectMode === 'manual' && !collectModeLocked() && state.mapMode !== 'enroute') {
+      state.mapMode = 'next';
+    }
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
@@ -2964,8 +3018,8 @@ const App = {
     toast('Task recording started');
   },
 
-  startPushedRecording(force) {
-    if (state.mapMode !== 'enroute' || state.cardRecording) return;
+  startPushedRecording(force, options = {}) {
+    if (state.mapMode !== 'enroute' || state.enrouteArrived || state.cardRecording) return;
     const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
     const start = task ? normPts(getTaskLatLngs(task))[0] : null;
     const dist = start && state.userPos ? haversineM(state.userPos, start) : Infinity;
@@ -2974,29 +3028,23 @@ const App = {
     state.recSeconds = 0;
     clearInterval(state.recInterval);
     state.recInterval = setInterval(() => {
-      if (state.shiftPaused || !state.cardRecording || state.mapMode !== 'enroute') return;
+      if (state.shiftPaused || state.discardSheetOpen || !state.cardRecording || state.mapMode !== 'enroute') return;
       state.recSeconds += 1;
       App.syncCardRecordButton();
+      App.updateMapChrome();
     }, 1000);
     App.syncCardRecordButton();
-  },
-
-  toggleCardRecording() {
-    if (state.mapMode !== 'enroute' || state.cardRecording) return;
-    App.startPushedRecording(true);
+    App.updateMapChrome();
+    if (!options.quiet) toast('Recording started');
   },
 
   syncCardRecordButton() {
-    const btn = document.querySelector('.pushed-next-record');
-    if (!btn) return;
-    btn.parentElement?.classList.toggle('is-live', !!state.cardRecording);
-    btn.disabled = !!state.cardRecording;
-    btn.setAttribute('aria-label', state.cardRecording ? 'Recording' : 'Start recording');
-    const time = btn.parentElement?.querySelector('.pushed-next-rec-time');
+    const time = document.querySelector('.pushed-next-rec-time');
     if (time) {
       time.textContent = formatTime(state.recSeconds || 0);
       time.classList.toggle('hidden', !state.cardRecording);
     }
+    document.querySelector('.pushed-next-rec')?.classList.toggle('is-live', !!state.cardRecording);
   },
 
   arriveTaskEnd() {
@@ -3010,7 +3058,12 @@ const App = {
 
   submitCapture() {
     if (state.completeButtonLoading) return;
-    if (state.mapMode === 'recording') App.stopRecording();
+    // Enroute recording is automatic — Submit only ends on-task recording.
+    if (state.mapMode === 'recording') {
+      App.stopRecording();
+      App.completeTask();
+      return;
+    }
     if (state.mapMode === 'completing') App.completeTask();
   },
 
@@ -3111,12 +3164,19 @@ const App = {
   },
 
   renderNextTaskDeck() {
+    const nearby =
+      typeof listNearbyManualTasks === 'function'
+        ? listNearbyManualTasks(state.userPos)
+        : listNearbyOpenTasks(state.userPos);
     App.renderTaskDeck(
       'next',
-      listNearbyOpenTasks(state.userPos),
+      nearby,
       'App.dismissRecommendation()',
-      (task) => `App.beginOrNavigate('${task.task_id}')`,
-      'Begin'
+      (task) =>
+        isClaimedTask(task)
+          ? `App.beginOrNavigate('${task.task_id}')`
+          : `App.acceptTask('${task.task_id}')`,
+      (task) => (isClaimedTask(task) ? 'Begin' : 'Accept')
     );
   },
 
@@ -3176,12 +3236,18 @@ const App = {
           ${renderTaskBadges(task)}
           ${renderTaskSheetLinks(task)}
           ${
-            mode === 'next' && isClaimedTask(task)
-              ? renderStartActions(task, 'Begin', `App.beginOrNavigate('${task.task_id}')`)
-              : mode === 'claim' && isClaimedTask(task)
-              ? renderStartActions(task)
+            (mode === 'next' || mode === 'claim') && isClaimedTask(task)
+              ? renderStartActions(
+                  task,
+                  'Begin',
+                  mode === 'next'
+                    ? `App.beginOrNavigate('${task.task_id}')`
+                    : `App.beginAcceptedTask('${task.task_id}')`
+                )
               : `<div class="task-sheet-actions">
-            <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${actionCall(task)}">${typeof actionLabel === 'function' ? actionLabel(task) : actionLabel}</button>
+            <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${
+              typeof actionCall === 'function' ? actionCall(task) : actionCall
+            }">${typeof actionLabel === 'function' ? actionLabel(task) : actionLabel}</button>
           </div>`
           }
         </article>`;
@@ -3261,9 +3327,12 @@ const App = {
     state.selectedTaskId = task.task_id;
     state.mapMode = 'enroute';
     state.navDistanceM = 0;
-    state.nextDestHidden = false;
     state.enrouteArrived = false;
     state.taskFoldOpen = false;
+    state.cardRecording = false;
+    state.recSeconds = 0;
+    clearInterval(state.recInterval);
+    state.recInterval = null;
     state.enrouteStartedBackground = !state.backgroundRecording;
     startBackgroundRecording();
     const sheet = document.getElementById('task-sheet');
@@ -3276,7 +3345,13 @@ const App = {
     beginTransit(task);
     App.renderMapTasks({ skipFit: true });
     App.updateMapChrome();
-    toast(state.collectMode === 'auto' ? 'Heading to the nearest task' : 'Navigation started');
+    // Auto-start capture while heading to the next task start.
+    App.startPushedRecording(true, { quiet: true });
+    toast(
+      state.collectMode === 'auto'
+        ? 'Heading to the nearest task · recording on'
+        : 'Navigation started · recording on'
+    );
   },
 
   renderPushedTaskCard(task) {
@@ -3299,8 +3374,7 @@ const App = {
     badges.push(`<span class="task-tag task-tag-duration">${mins} min</span>`);
     el.innerHTML = `
       <div class="task-sheet-card pushed-next-card">
-        <div class="pushed-next-rec${state.cardRecording ? ' is-live' : ''}">
-          <button type="button" class="pushed-next-record" onclick="App.toggleCardRecording()" aria-label="${state.cardRecording ? 'Recording' : 'Start recording'}"${state.cardRecording ? ' disabled' : ''}></button>
+        <div class="pushed-next-rec is-live" aria-live="polite">
           <span class="pushed-next-live">
             <span class="pushed-next-breathe" aria-hidden="true"></span>
             <span class="pushed-next-rec-time">${formatTime(state.recSeconds || 0)}</span>
@@ -3332,6 +3406,8 @@ const App = {
   },
 
   onTransitArrived() {
+    clearInterval(state.recInterval);
+    state.recInterval = null;
     state.cardRecording = false;
     App.renderPushedTaskCard(null);
     App.showArrivedTaskCard();
@@ -3342,6 +3418,14 @@ const App = {
     const sheet = document.getElementById('task-sheet');
     if (!task || !sheet) return;
     state.enrouteArrived = true;
+    // Auto mode: never wait on Begin — start the task flow immediately.
+    if (state.collectMode === 'auto' && state.shiftActive) {
+      sheet.classList.add('hidden');
+      sheet.innerHTML = '';
+      App.renderPushedTaskCard(null);
+      App.continueAutoTask();
+      return;
+    }
     const start = getTaskEndpoints(task).start;
     const distanceM = state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : 0;
     const km = (distanceM / 1000).toFixed(1);
@@ -3357,12 +3441,11 @@ const App = {
         </div>
         ${renderTaskBadges(task)}
         ${renderTaskSheetLinks(task)}
-        ${renderStartActions(task)}
+        ${renderStartActions(task, 'Begin', `App.beginAcceptedTask('${task.task_id}')`)}
       </div>
     `;
     App.renderPushedTaskCard(null);
     App.updateMapChrome();
-    if (state.collectMode === 'auto' && state.shiftActive) App.continueAutoTask();
   },
 
   continueAutoTask() {
@@ -3370,14 +3453,40 @@ const App = {
     const id = state.selectedTaskId;
     if (!id) return;
     state.autoAdvancing = true;
-    document.querySelector('.task-sheet-begin')?.classList.add('is-auto-press');
     setTimeout(() => {
       state.autoAdvancing = false;
       if (state.collectMode !== 'auto' || !state.shiftActive) return;
       if (state.mapMode === 'recording' || state.mapMode === 'completing') return;
       if (state.selectedTaskId !== id) return;
       App.beginAcceptedTask(id);
-    }, 480);
+    }, 320);
+  },
+
+  navigateToTask(id) {
+    const task = state.mapTasks.find((t) => t.task_id === id);
+    if (!task || !isClaimedTask(task)) {
+      toast('Accept the task first');
+      return;
+    }
+    state.selectedTaskId = id;
+    const start = getTaskEndpoints(task).start;
+    const distanceM =
+      state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : Infinity;
+    if (distanceM <= AT_TASK_START_M) {
+      state.mapMode = 'enroute';
+      state.enrouteArrived = true;
+      App.showArrivedTaskCard();
+      toast('You are at the task start');
+      return;
+    }
+    if (state.mapMode !== 'next') state.mapMode = 'next';
+    App.startNextNavigation(id);
+  },
+
+  shareDirections(id) {
+    const task = state.mapTasks.find((t) => t.task_id === id) || state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    if (!task) return;
+    toast('Opening Google Maps…');
   },
 
   toggleTaskFold() {
@@ -3393,43 +3502,76 @@ const App = {
     const start = getTaskEndpoints(task).start;
     const distanceM = state.userPos && start && typeof haversineM === 'function' ? haversineM(state.userPos, start) : (task.distance_from_user_km || 0) * 1000;
     const km = (distanceM / 1000).toFixed(1);
+    const ticketId = task.ticket_id || task.task_id;
     el.innerHTML = `
-      <article class="task-sheet-card">
-        <div class="task-sheet-head">
-          <div class="task-sheet-head-copy">
-            <h2 class="task-sheet-title">${getTaskSheetTitle(task)}</h2>
-            <p class="task-sheet-meta">${km} kilometers away from you | ${task.poi_address || ''}</p>
-          </div>
-          ${renderTaskCardCloseBtn('App.toggleTaskFold()')}
+      <article class="task-fold-peek">
+        <button type="button" class="task-fold-peek-main" onclick="App.toggleTaskFold()" aria-label="Collapse task">
+          <span class="task-fold-peek-copy">
+            <strong>${getTaskSheetTitle(task)}</strong>
+            <span>${km} km · ${task.poi_address || ''}</span>
+          </span>
+        </button>
+        <div class="task-fold-peek-actions">
+          <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.navigateToTask('${task.task_id}')">
+            ${TASK_SHEET_NAV_ICON}
+            <span>Navigate</span>
+          </button>
+          <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.copyTicketId('${ticketId}')">
+            ${TASK_SHEET_COPY_ICON}
+            <span>Copy ID</span>
+          </button>
+          <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.shareDirections('${task.task_id}')">
+            ${TASK_SHEET_SHARE_ICON}
+            <span>Share Directions</span>
+          </button>
         </div>
-        ${renderTaskBadges(task)}
-        ${renderTaskSheetLinks(task)}
       </article>`;
   },
 
-  dismissNextDest() {
-    state.nextDestHidden = true;
-    App.syncNextDestination();
+  toggleAutoMode() {
+    if (!collectModeVisible()) return;
+    if (state.collectMode === 'auto') {
+      document.getElementById('modal-auto-start')?.classList.remove('show');
+      if (state.shiftActive || state.shiftPaused || state.continuousCollect) {
+        App.stopAutoCollect();
+      }
+      showManualRecommend({ quiet: true });
+      return;
+    }
+    App.setCollectMode('auto');
   },
 
-  syncNextDestination() {
-    const el = document.getElementById('next-dest');
-    if (!el) return;
-    const task = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
-    const show = state.mapMode === 'enroute' && !state.enrouteArrived && !state.nextDestHidden && !state.taskFoldOpen && !!task;
-    el.classList.toggle('hidden', !show);
-    if (!show || !task) return;
-    const total = typeof routeCumul === 'function' ? (routeCumul(state.transitPts || []).pop() || 0) : 0;
-    const remain = Math.max(0, total - (state.transitDistanceM || 0));
-    const dist = document.getElementById('next-dest-dist');
-    if (dist) dist.textContent = `Next Destination: ${typeof formatNavMeters === 'function' ? formatNavMeters(remain) : ''}`;
-  },
-
-  setCollectMode(mode) {
-    if (state.shiftActive || state.shiftPaused) return;
+  setCollectMode(mode, options = {}) {
     if (mode !== 'manual' && mode !== 'auto') return;
-    state.collectMode = mode;
+    if (!collectModeVisible()) return;
+    if (mode === 'auto') {
+      if (state.collectMode === 'auto' && state.shiftActive) {
+        toast('Auto mode is already running');
+        return;
+      }
+      document.getElementById('modal-auto-start')?.classList.add('show');
+      return;
+    }
+    document.getElementById('modal-auto-start')?.classList.remove('show');
+    if (state.collectMode === 'auto' && (state.shiftActive || state.shiftPaused || state.continuousCollect)) {
+      App.stopAutoCollect();
+    }
+    showManualRecommend({ quiet: !!options.silent });
+  },
+
+  cancelAutoStart() {
+    App.closeModal('modal-auto-start');
+    state.collectMode = 'manual';
     updateMapStatsWidgets();
+  },
+
+  confirmAutoStart() {
+    App.closeModal('modal-auto-start');
+    state.collectMode = 'auto';
+    updateMapStatsWidgets();
+    if (state.screen !== 'map') App.go('map');
+    state.shiftStartPending = true;
+    App.openPrecondition();
   },
 
   toggleShiftPause() {

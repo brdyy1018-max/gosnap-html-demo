@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20261019y" />
+    <link rel="stylesheet" href="styles.css?v=20261020y" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -288,57 +288,41 @@
           </div>
           <div id="map"></div>
           <div class="nav-banner hidden" id="nav-banner" aria-live="polite"></div>
-          <button type="button" class="next-dest hidden" id="next-dest">
-            <span class="next-dest-x" onclick="event.stopPropagation(); App.dismissNextDest()" aria-label="Dismiss destination">×</span>
-            <span class="next-dest-copy">
-              <strong id="next-dest-dist">Next Destination</strong>
-            </span>
-          </button>
+          <div class="nav-dest-bar hidden" id="nav-dest-bar" aria-live="polite"></div>
           <div class="map-stats-widget map-shift-panel" data-map-screen="map">
-            <div class="map-shift-row">
-              <div class="map-shift-drag" id="map-shift-drag">
-                <button
-                  type="button"
-                  class="map-shift-btn"
-                  id="map-shift-btn"
-                  onclick="App.toggleShift()"
-                  aria-pressed="false"
-                  aria-label="Start shift"
-                >
-                  <span class="map-shift-play" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M8.5 5.2v13.6L19.2 12 8.5 5.2z" fill="currentColor"/></svg>
-                  </span>
-                  <span class="map-shift-stop-icon" aria-hidden="true"></span>
-                  <span class="map-shift-btn-text" data-shift-action>Start</span>
-                </button>
-              </div>
-              <div class="map-hud-distance" aria-live="polite">
+            <div class="map-session-card">
+              <div class="map-session-strip" aria-live="polite">
                 <span class="map-hud-rec-dot hidden" data-shift-rec-dot aria-hidden="true"></span>
-                <div class="map-hud-stat">
-                  <span class="map-hud-distance-value" data-stat="distance">0 km</span>
-                  <span class="map-hud-distance-label" data-stat="distance-label">Total Distance</span>
+                <div class="map-session-metrics">
+                  <div class="map-session-metric">
+                    <span class="map-session-value" data-stat="distance">0 km</span>
+                    <span class="map-session-label" data-stat="distance-label">Distance</span>
+                  </div>
+                  <div class="map-session-metric">
+                    <span class="map-session-value" data-stat="tasks">0/10</span>
+                    <span class="map-session-label" data-stat="tasks-label">Tasks</span>
+                  </div>
                 </div>
-                <span class="map-hud-stat-divider" aria-hidden="true"></span>
-                <div class="map-hud-stat">
-                  <span class="map-hud-distance-value" data-stat="tasks">0/10</span>
-                  <span class="map-hud-distance-label" data-stat="tasks-label">Tasks Done</span>
+                <div class="collect-mode" id="collect-mode" role="group" aria-label="Auto mode">
+                  <button
+                    type="button"
+                    class="collect-auto-switch"
+                    id="collect-auto-switch"
+                    data-collect-mode="auto"
+                    aria-pressed="false"
+                    onclick="App.toggleAutoMode()"
+                  >
+                    <span class="collect-auto-label">Auto</span>
+                    <span class="collect-auto-track" aria-hidden="true"><span class="collect-auto-knob"></span></span>
+                  </button>
                 </div>
               </div>
-            </div>
-            <div class="collect-mode" id="collect-mode" role="group" aria-label="Collection mode">
-              <button type="button" data-collect-mode="manual" class="is-on" onclick="App.setCollectMode('manual')">Manual</button>
-              <button type="button" data-collect-mode="auto" onclick="App.setCollectMode('auto')">Auto</button>
             </div>
           </div>
-          <div class="task-fold-card hidden" id="task-fold-card"></div>
           <div class="map-float-actions hidden" id="map-float-actions">
             <button type="button" class="map-float-btn" onclick="App.exitCapture()">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6" stroke-linecap="round"/></svg>
               <span>Exit</span>
-            </button>
-            <button type="button" class="map-task-fold hidden" id="map-task-fold" onclick="App.toggleTaskFold()" aria-expanded="false">
-              <span class="map-task-fold-chevron" aria-hidden="true"></span>
-              <span>Tasks</span>
             </button>
             <button type="button" class="map-float-btn map-float-rest hidden" id="map-float-rest" onclick="toast('Rest break started')">Rest</button>
             <button type="button" class="map-float-btn map-float-overview" id="map-float-over" onclick="App.toggleMapCamera()" aria-pressed="false" aria-label="Overview">
@@ -384,6 +368,11 @@
 
           <!-- Active capture (navigate / record / complete) -->
           <div class="capture-sheet hidden" id="capture-sheet">
+            <button type="button" class="map-task-fold hidden" id="map-task-fold" onclick="App.toggleTaskFold()" aria-expanded="false" aria-label="Task">
+              <span class="map-task-fold-chevron" aria-hidden="true"></span>
+              <span class="map-task-fold-label">Task</span>
+            </button>
+            <div class="capture-task-fold hidden" id="task-fold-card"></div>
             <div class="pushed-task-card hidden" id="pushed-task-card"></div>
             <h2 class="capture-title visually-hidden" id="capture-title">Sorrento Valley</h2>
             <div class="capture-submit-row">
@@ -391,6 +380,7 @@
                 <span class="capture-dot" id="capture-dot"></span>
                 <span class="capture-time" id="capture-time">0:00</span>
               </div>
+              <button type="button" class="capture-start-record hidden" id="capture-start-record" hidden aria-hidden="true">Start recording</button>
               <button type="button" class="capture-submit" id="capture-submit" onclick="App.submitCapture()">Submit</button>
             </div>
             <div class="capture-controls" id="capture-controls" hidden></div>
@@ -885,6 +875,19 @@
       </div>
     </div>
 
+    <div class="overlay" id="modal-auto-start">
+      <div class="modal modal-start">
+        <h3>Start Auto Mode?</h3>
+        <p>
+          Auto will navigate to your nearest claimed task and keep collecting without asking you to tap Begin.
+        </p>
+        <div class="modal-confirm-actions">
+          <button type="button" class="btn btn-ghost" onclick="App.cancelAutoStart()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="App.confirmAutoStart()">Start</button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="modal-logout">
       <div class="modal modal-logout">
         <h3>Do you want to log out now?</h3>
@@ -949,8 +952,8 @@
       crossorigin=""
     ></script>
     <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
-    <script src="nav.js?v=20261019q"></script>
-    <script src="app.js?v=20261019y"></script>
+    <script src="nav.js?v=20261020t"></script>
+    <script src="app.js?v=20261020z"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;
