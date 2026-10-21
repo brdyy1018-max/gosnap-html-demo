@@ -473,13 +473,11 @@ function syncNavDestBar(task, pts, maneuver, arrived) {
   const atStart = !!arrived || (m.type === 'arrive' && m.remain < 40);
   const total = typeof routeCumul === 'function' ? (routeCumul(routePts).pop() || 0) : 0;
   const remainToStart = Math.max(0, total - (state.transitDistanceM || 0));
-  const title = typeof getTaskSheetTitle === 'function' ? getTaskSheetTitle(task) : (task.poi_name || 'Task');
   const showRemain =
     !atStart && !(m.type === 'arrive' || Math.abs(m.remain - remainToStart) < 25);
   bar.className = `nav-dest-bar${atStart ? ' is-here' : ''}`;
   bar.innerHTML = `
     <span class="nav-dest-kicker">${atStart ? 'At task start' : 'To task start'}</span>
-    <span class="nav-dest-name">${title}</span>
     ${showRemain ? `<span class="nav-dest-remain">${formatNavMeters(remainToStart)}</span>` : ''}`;
 }
 

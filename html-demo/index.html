@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20261020y" />
+    <link rel="stylesheet" href="styles.css?v=20261021k" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -381,7 +381,7 @@
                 <span class="capture-time" id="capture-time">0:00</span>
               </div>
               <button type="button" class="capture-start-record hidden" id="capture-start-record" hidden aria-hidden="true">Start recording</button>
-              <button type="button" class="capture-submit" id="capture-submit" onclick="App.submitCapture()">Submit</button>
+              <button type="button" class="capture-submit" id="capture-submit" onclick="App.onCapturePrimary()">Submit</button>
             </div>
             <div class="capture-controls" id="capture-controls" hidden></div>
           </div>
@@ -389,39 +389,43 @@
           <div class="discard-layer hidden" id="discard-layer">
             <button type="button" class="discard-mask" onclick="App.closeDiscardSheet()" aria-label="Close"></button>
             <div class="discard-sheet" role="dialog" aria-labelledby="discard-title">
-              <div class="sheet-handle"></div>
-              <div class="sheet-top">
-                <strong id="discard-title">Discard</strong>
-                <button type="button" class="sheet-close" onclick="App.closeDiscardSheet()" aria-label="Close">×</button>
+              <div class="discard-head">
+                <h2 id="discard-title">Why discard this task?</h2>
+                <button type="button" class="discard-close" onclick="App.closeDiscardSheet()" aria-label="Close">×</button>
               </div>
-              <div class="discard-body">
-                <div class="discard-section-head">
-                  <div class="discard-section-title">
-                    <span>1.Reason for Discarding</span>
-                    <span class="discard-required" aria-hidden="true">*</span>
-                    <span class="discard-check hidden" id="discard-check" aria-label="Selected">✓</span>
-                  </div>
-                  <button type="button" class="discard-info" onclick="toast('A reason is required before this recording can be discarded.')" aria-label="About this field">i</button>
-                </div>
-                <div class="discard-reasons" id="discard-reasons">
-                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Task Unreachable" onchange="App.onDiscardReason()" /><span>Task Unreachable</span></label>
-                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Address Not Found" onchange="App.onDiscardReason()" /><span>Address Not Found</span></label>
-                  <label class="discard-reason"><input type="radio" name="discard-reason" value="Other" onchange="App.onDiscardReason()" /><span>Other</span></label>
-                </div>
-                <h3 class="discard-section-label">3. Supplementary Description</h3>
-                <div class="discard-note">
-                  <textarea id="discard-note" maxlength="300" placeholder="Add detail reason." oninput="App.onDiscardNote()"></textarea>
-                  <span class="discard-count" id="discard-count">0/300</span>
-                  <div class="discard-photos" id="discard-photos">
-                    <button type="button" class="discard-add" id="discard-add" onclick="document.getElementById('discard-file').click()">
-                      <span>+</span>
-                      <small>Up to three</small>
-                    </button>
-                  </div>
-                  <input id="discard-file" class="visually-hidden" type="file" accept="image/*" onchange="App.onDiscardPhoto(this)" />
-                </div>
+              <p class="discard-sub">Choose the issue that best describes this task.</p>
+              <div class="discard-grid" id="discard-reasons" role="radiogroup" aria-label="Discard reason">
+                <button type="button" class="discard-tile" data-reason="No Trespassing" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3.2 20 6.4v5.2c0 4.4-3.1 7.6-8 9.2-4.9-1.6-8-4.8-8-9.2V6.4L12 3.2Z"/><path d="M12 8.2v4.2" stroke-linecap="round"/><circle cx="12" cy="15.4" r="0.8" fill="currentColor" stroke="none"/></svg></span>
+                  <span>No Trespassing</span>
+                </button>
+                <button type="button" class="discard-tile" data-reason="No Photography" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.5h3.2L9 6.2h6l1.8 2.3H20a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z"/><circle cx="12" cy="13.2" r="2.6"/><path d="M5 5.2 19 19" stroke-linecap="round"/></svg></span>
+                  <span>No Photography</span>
+                </button>
+                <button type="button" class="discard-tile" data-reason="Private Property" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="10.5" width="12" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke-linecap="round"/></svg></span>
+                  <span>Private Property</span>
+                </button>
+                <button type="button" class="discard-tile" data-reason="Emergency Evasion" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4.2 13.6 8l.6 2.2H16l2.2 1.2-1.6 1.8.6 2.4L15 14.2 12 15.6 9 14.2l-2.2 1.4.6-2.4L5.8 11.4 8 10.2h1.8L10.4 8 12 4.2Z" stroke-linejoin="round"/><path d="M8.2 18.6h7.6" stroke-linecap="round"/></svg></span>
+                  <span>Emergency Evasion</span>
+                </button>
+                <button type="button" class="discard-tile" data-reason="Address Not Found" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20.5s6-5.1 6-9.2A6 6 0 0 0 6 11.3c0 4.1 6 9.2 6 9.2Z"/><circle cx="12" cy="11" r="1.8"/><path d="M5 5.2 19 19" stroke-linecap="round"/></svg></span>
+                  <span>Address Not Found</span>
+                </button>
+                <button type="button" class="discard-tile" data-reason="Other" onclick="App.pickDiscardReason(this)">
+                  <span class="discard-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="6.5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17.5" cy="12" r="1.5"/></svg></span>
+                  <span>Other</span>
+                </button>
               </div>
-              <button type="button" class="btn btn-primary discard-confirm" id="discard-confirm" onclick="App.confirmDiscard()" disabled>Confirm</button>
+              <div class="discard-other hidden" id="discard-other">
+                <label class="discard-other-label" for="discard-note">Add a detail</label>
+                <textarea id="discard-note" maxlength="300" placeholder="Add detail reason." oninput="App.onDiscardNote()"></textarea>
+                <span class="discard-count" id="discard-count">0/300</span>
+                <button type="button" class="btn btn-primary discard-other-confirm" id="discard-confirm" onclick="App.confirmDiscard()">Confirm</button>
+              </div>
             </div>
           </div>
         </div>
@@ -859,6 +863,26 @@
       </div>
     </div>
 
+    <div class="overlay" id="modal-position">
+      <div class="modal modal-position" role="dialog" aria-labelledby="position-verify-title">
+        <div class="position-verify-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="56" height="56">
+            <circle cx="32" cy="32" r="32" fill="#ffe8e6"/>
+            <path d="M24 18.5a7 7 0 017 7c0 4.8-7 11.5-7 11.5s-7-6.7-7-11.5a7 7 0 017-7Z" fill="#ff3b30"/>
+            <circle cx="24" cy="25.2" r="2.4" fill="#fff"/>
+            <path d="M42 22.5a7 7 0 017 7c0 4.8-7 11.5-7 11.5s-7-6.7-7-11.5a7 7 0 017-7Z" fill="#ff3b30"/>
+            <circle cx="42" cy="29.2" r="2.4" fill="#fff"/>
+            <path d="M22 40.5c6 3.2 14 3.2 20 0" fill="none" stroke="#ff3b30" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h3 id="position-verify-title">Position Verification</h3>
+        <p id="position-verify-body">The target needs to be with in 500 meters of the location...</p>
+        <button type="button" class="position-verify-btn position-verify-btn--retry" onclick="App.retryPositionCheck()">Retry</button>
+        <button type="button" class="position-verify-btn position-verify-btn--force" id="position-force-btn" onclick="App.confirmPositionCheck()">Force Begin</button>
+        <button type="button" class="position-verify-btn position-verify-btn--close" onclick="App.closePositionCheck()">Close</button>
+      </div>
+    </div>
+
     <div class="overlay" id="modal-safety">
       <div class="modal modal-start">
         <div class="modal-icon-box">📹</div>
@@ -952,8 +976,8 @@
       crossorigin=""
     ></script>
     <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
-    <script src="nav.js?v=20261020t"></script>
-    <script src="app.js?v=20261020z"></script>
+    <script src="nav.js?v=20261021a"></script>
+    <script src="app.js?v=20261021k"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

@@ -132,12 +132,39 @@ function getSelectedMapTask() {
 }
 
 const TASK_PROXIMITY_MAX_KM = 0.5;
+const TASK_BEGIN_RADIUS_M = 500;
 const PROXIMITY_FAIL_TOAST = 'The target needs to be within 500 meters of the location...';
+
+function distanceToTaskStartM(task) {
+  if (!task) return Infinity;
+  const start = getTaskEndpoints(task).start;
+  if (state.userPos && start && typeof haversineM === 'function') {
+    return haversineM(state.userPos, start);
+  }
+  if (typeof task.distance_from_user_km === 'number') return task.distance_from_user_km * 1000;
+  return Infinity;
+}
+
+function isWithinBeginRadius(task) {
+  return distanceToTaskStartM(task) <= TASK_BEGIN_RADIUS_M;
+}
+
+function distanceToTaskEndM(task) {
+  if (!task) return Infinity;
+  const end = getTaskEndpoints(task).end;
+  if (state.userPos && end && typeof haversineM === 'function') return haversineM(state.userPos, end);
+  return Infinity;
+}
+
+function isWithinEndRadius(task) {
+  if (state.settings.simulateFailedChecks) return false;
+  return distanceToTaskEndM(task) <= TASK_BEGIN_RADIUS_M;
+}
 
 function isTaskWithinProximity() {
   const t = getSelectedMapTask();
   if (!t) return true;
-  return (t.distance_from_user_km || 0) <= TASK_PROXIMITY_MAX_KM;
+  return isWithinBeginRadius(t);
 }
 
 function shouldFailProximityCheck(alreadyRetried) {
@@ -260,9 +287,9 @@ function renderTaskSheetLinks(t) {
       ${TASK_SHEET_COPY_ICON}
       <span>Copy ID</span>
     </button>
-    <button type="button" class="task-sheet-link task-sheet-link--share" onclick="event.stopPropagation(); App.shareDirections('${id}')">
+    <button type="button" class="task-sheet-link" onclick="event.stopPropagation(); App.shareDirections('${id}')">
       ${TASK_SHEET_SHARE_ICON}
-      <span>Share Directions</span>
+      <span>Share</span>
     </button>
   </div>`;
 }
@@ -276,7 +303,19 @@ function beginCardVisible() {
   return !!(task && isClaimedTask(task));
 }
 
-function renderStartActions(task, label = 'Begin', action = `App.beginAcceptedTask('${task.task_id}')`) {
+function taskActionCardVisible() {
+  const sheet = document.getElementById('task-sheet');
+  if (!sheet || sheet.classList.contains('hidden')) return false;
+  if (state.mapMode === 'recording' || state.mapMode === 'completing') return false;
+  if (state.mapMode === 'enroute' && !state.enrouteArrived) return false;
+  if (state.mapMode === 'next' || state.mapMode === 'claim') return true;
+  const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+  if (!task) return false;
+  if (['completed', 'completed_local', 'discarded'].includes(task.display_state)) return false;
+  return isClaimedTask(task) || isUnclaimedTask(task);
+}
+
+function renderStartActions(task, label = 'Begin', action = `App.requestBegin('${task.task_id}')`) {
   return `<div class="task-sheet-actions split">
     <button type="button" class="task-release-btn" onclick="event.stopPropagation(); App.releaseTask('${task.task_id}')">
       ${TASK_SHEET_RELEASE_ICON}
@@ -349,6 +388,8 @@ const state = {
   beginPreconditionPassed: false,
   beginProximityRetried: false,
   beginButtonLoading: false,
+  pendingBeginTaskId: null,
+  positionIntent: 'begin',
   completeProximityRetried: false,
   completeButtonLoading: false,
   deviceChecks: { gps: true, bluetooth: true, network: true, storage: true },
@@ -1724,7 +1765,12 @@ const App = {
       displayName: account.displayName,
     };
     App.clearLoginError();
-    setTimeout(() => App.go('precheck'), 280);
+    applyReadyChecks();
+    state.onboardingComplete = true;
+    state.selectedGopros = ['GoPro-1'];
+    state.selectedTaskId = null;
+    state.mapMode = 'idle';
+    setTimeout(() => App.go('map'), 280);
   },
 
   unlockPrecheckLocationAlert(delay = 650) {
@@ -2421,19 +2467,23 @@ const App = {
     const turnHud = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !arrivedCard);
     const enrouteDrive = state.mapMode === 'enroute' && !arrivedCard;
     const enrouteLive = enrouteDrive && !!state.cardRecording;
-    // Enroute take is auto-only — no Start / Submit controls for the user.
     const canSubmit = state.mapMode === 'recording' || state.mapMode === 'completing';
     document.querySelector('.capture-submit-row')?.classList.toggle('hidden', arrivedCard);
     document.getElementById('capture-start-record')?.classList.toggle('hidden', true);
     const submitBtn = document.getElementById('capture-submit');
-    submitBtn?.classList.toggle('hidden', !canSubmit);
+    const showCaptureAction = canSubmit || enrouteDrive;
+    submitBtn?.classList.toggle('hidden', !showCaptureAction);
     if (submitBtn) {
       const loading = state.mapMode === 'completing' && !!state.completeButtonLoading;
+      const enrouteRecord = enrouteDrive && !enrouteLive;
       submitBtn.disabled = loading;
       submitBtn.classList.toggle('is-loading', loading);
-      submitBtn.textContent = loading ? 'Submitting…' : 'Submit';
+      submitBtn.classList.toggle('is-record', enrouteRecord);
+      if (loading) submitBtn.textContent = 'Submitting…';
+      else if (enrouteRecord) submitBtn.textContent = 'Record';
+      else submitBtn.textContent = 'Submit';
     }
-    document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || beginCardVisible()));
+    document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || taskActionCardVisible()));
     const foldBtn = document.getElementById('map-task-fold');
     const foldCard = document.getElementById('task-fold-card');
     if (!turnHud) state.taskFoldOpen = false;
@@ -2871,10 +2921,72 @@ const App = {
   beginAcceptedTask(id) {
     const t = state.mapTasks.find((x) => x.task_id === id);
     if (!t || !isClaimedTask(t)) return;
+    state.pendingBeginTaskId = null;
     state.selectedTaskId = id;
     state.claimDeckKeptIds = [];
     state.mapMode = 'idle';
     App.startOverviewRecording();
+  },
+
+  requestBegin(id) {
+    const t = state.mapTasks.find((x) => x.task_id === id);
+    if (!t || !isClaimedTask(t)) return;
+    state.selectedTaskId = id;
+    if (isWithinBeginRadius(t)) {
+      App.beginAcceptedTask(id);
+      return;
+    }
+    state.pendingBeginTaskId = id;
+    App.openPositionCheck('begin');
+  },
+
+  openPositionCheck(intent) {
+    state.positionIntent = intent === 'submit' ? 'submit' : 'begin';
+    const forceBtn = document.getElementById('position-force-btn');
+    if (forceBtn) forceBtn.textContent = state.positionIntent === 'submit' ? 'Force Submit' : 'Force Begin';
+    document.getElementById('modal-position')?.classList.add('show');
+  },
+
+  retryPositionCheck() {
+    const id = state.pendingBeginTaskId || state.selectedTaskId;
+    const t = state.mapTasks.find((x) => x.task_id === id);
+    if (!t) return;
+    if (state.positionIntent === 'submit') {
+      if (!isWithinEndRadius(t)) {
+        toast(PROXIMITY_FAIL_TOAST);
+        return;
+      }
+      App.closePositionCheck();
+      App.finishTaskSubmit();
+      return;
+    }
+    if (isWithinBeginRadius(t)) {
+      App.closePositionCheck();
+      App.beginAcceptedTask(id);
+      return;
+    }
+    toast(PROXIMITY_FAIL_TOAST);
+  },
+
+  confirmPositionCheck() {
+    if (state.positionIntent === 'submit') {
+      App.closePositionCheck();
+      App.finishTaskSubmit();
+      return;
+    }
+    App.forceBeginTask();
+  },
+
+  forceBeginTask() {
+    const id = state.pendingBeginTaskId || state.selectedTaskId;
+    App.closeModal('modal-position');
+    if (id) App.beginAcceptedTask(id);
+  },
+
+  closePositionCheck() {
+    state.pendingBeginTaskId = null;
+    state.positionIntent = 'begin';
+    App.closeModal('modal-position');
   },
 
   openBegin() {
@@ -3056,15 +3168,41 @@ const App = {
     state.autoFinishing = false;
   },
 
-  submitCapture() {
-    if (state.completeButtonLoading) return;
-    // Enroute recording is automatic — Submit only ends on-task recording.
-    if (state.mapMode === 'recording') {
-      App.stopRecording();
-      App.completeTask();
+  onCapturePrimary() {
+    if (state.mapMode === 'enroute' && !state.enrouteArrived) {
+      if (state.cardRecording) App.submitEnrouteTake();
+      else App.startPushedRecording(true);
       return;
     }
-    if (state.mapMode === 'completing') App.completeTask();
+    App.submitCapture();
+  },
+
+  submitEnrouteTake() {
+    if (state.mapMode !== 'enroute' || state.enrouteArrived || !state.cardRecording) return;
+    clearInterval(state.recInterval);
+    state.recInterval = null;
+    state.cardRecording = false;
+    state.recSeconds = 0;
+    App.syncCardRecordButton();
+    App.updateMapChrome();
+    toast('Take submitted');
+  },
+
+  submitCapture() {
+    if (state.completeButtonLoading) return;
+    if (state.mapMode === 'recording' || state.mapMode === 'completing') {
+      const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
+      if (t && !state.autoFinishing && !isWithinEndRadius(t)) {
+        App.openPositionCheck('submit');
+        return;
+      }
+      App.finishTaskSubmit();
+    }
+  },
+
+  finishTaskSubmit() {
+    if (state.mapMode === 'recording') App.stopRecording();
+    App.completeTask({ force: true });
   },
 
   stopRecording() {
@@ -3078,22 +3216,17 @@ const App = {
     App.updateMapChrome();
   },
 
-  completeTask() {
+  completeTask(options = {}) {
     if (state.completeButtonLoading) return;
     const t = state.mapTasks.find((x) => x.task_id === state.selectedTaskId);
-    if (!t || state.mapMode !== 'completing') return;
+    if (!t || (state.mapMode !== 'completing' && state.mapMode !== 'recording')) return;
 
-    if (shouldFailProximityCheck(state.completeProximityRetried)) {
-      state.completeButtonLoading = true;
-      App.updateMapChrome();
-      toast(PROXIMITY_FAIL_TOAST);
-      setTimeout(() => {
-        state.completeProximityRetried = true;
-        state.completeButtonLoading = false;
-        App.updateMapChrome();
-      }, 900);
+    if (!options.force && !state.autoFinishing && !isWithinEndRadius(t)) {
+      App.openPositionCheck('submit');
       return;
     }
+
+    if (state.mapMode === 'recording') App.stopRecording();
 
     t.display_state = 'completed_local';
     t.review_status = 'awaiting';
@@ -3202,7 +3335,7 @@ const App = {
       'App.closeTaskSheet()',
       (task) =>
         isClaimedTask(task)
-          ? `App.beginAcceptedTask('${task.task_id}')`
+          ? `App.requestBegin('${task.task_id}')`
           : `App.acceptTask('${task.task_id}')`,
       (task) => (isClaimedTask(task) ? 'Begin' : 'Accept')
     );
@@ -3241,8 +3374,8 @@ const App = {
                   task,
                   'Begin',
                   mode === 'next'
-                    ? `App.beginOrNavigate('${task.task_id}')`
-                    : `App.beginAcceptedTask('${task.task_id}')`
+                    ? `App.requestBegin('${task.task_id}')`
+                    : `App.requestBegin('${task.task_id}')`
                 )
               : `<div class="task-sheet-actions">
             <button type="button" class="btn btn-primary task-sheet-accept" onclick="event.stopPropagation(); ${
@@ -3345,13 +3478,7 @@ const App = {
     beginTransit(task);
     App.renderMapTasks({ skipFit: true });
     App.updateMapChrome();
-    // Auto-start capture while heading to the next task start.
-    App.startPushedRecording(true, { quiet: true });
-    toast(
-      state.collectMode === 'auto'
-        ? 'Heading to the nearest task · recording on'
-        : 'Navigation started · recording on'
-    );
+    toast(state.collectMode === 'auto' ? 'Heading to the nearest task' : 'Navigation started');
   },
 
   renderPushedTaskCard(task) {
@@ -3441,7 +3568,7 @@ const App = {
         </div>
         ${renderTaskBadges(task)}
         ${renderTaskSheetLinks(task)}
-        ${renderStartActions(task, 'Begin', `App.beginAcceptedTask('${task.task_id}')`)}
+        ${renderStartActions(task, 'Begin', `App.requestBegin('${task.task_id}')`)}
       </div>
     `;
     App.renderPushedTaskCard(null);
@@ -3512,17 +3639,13 @@ const App = {
           </span>
         </button>
         <div class="task-fold-peek-actions">
-          <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.navigateToTask('${task.task_id}')">
-            ${TASK_SHEET_NAV_ICON}
-            <span>Navigate</span>
-          </button>
           <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.copyTicketId('${ticketId}')">
             ${TASK_SHEET_COPY_ICON}
             <span>Copy ID</span>
           </button>
           <button type="button" class="task-fold-action" onclick="event.stopPropagation(); App.shareDirections('${task.task_id}')">
             ${TASK_SHEET_SHARE_ICON}
-            <span>Share Directions</span>
+            <span>Share</span>
           </button>
         </div>
       </article>`;
@@ -3614,18 +3737,15 @@ const App = {
   },
 
   openDiscardSheet() {
-    const onRoute = state.mapMode === 'recording' || state.mapMode === 'enroute';
-    if (!onRoute && !beginCardVisible()) return;
+    const onRoute = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !state.enrouteArrived);
+    if (!onRoute && !taskActionCardVisible() && !beginCardVisible()) return;
     state.discardSheetOpen = true;
-    state.discardPhotos = [];
-    document.querySelectorAll('input[name="discard-reason"]').forEach((input) => {
-      input.checked = false;
-    });
+    state.discardReason = '';
+    document.querySelectorAll('.discard-tile').forEach((tile) => tile.classList.remove('is-on'));
     const note = document.getElementById('discard-note');
     if (note) note.value = '';
     App.onDiscardNote();
-    App.onDiscardReason();
-    App.renderDiscardPhotos();
+    document.getElementById('discard-other')?.classList.add('hidden');
     document.getElementById('discard-layer')?.classList.remove('hidden');
   },
 
@@ -3634,11 +3754,20 @@ const App = {
     document.getElementById('discard-layer')?.classList.add('hidden');
   },
 
-  onDiscardReason() {
-    const picked = document.querySelector('input[name="discard-reason"]:checked');
-    document.getElementById('discard-check')?.classList.toggle('hidden', !picked);
-    const confirm = document.getElementById('discard-confirm');
-    if (confirm) confirm.disabled = !picked;
+  pickDiscardReason(tile) {
+    const reason = tile?.dataset?.reason;
+    if (!reason) return;
+    state.discardReason = reason;
+    document.querySelectorAll('.discard-tile').forEach((item) => {
+      item.classList.toggle('is-on', item === tile);
+    });
+    if (reason === 'Other') {
+      document.getElementById('discard-other')?.classList.remove('hidden');
+      document.getElementById('discard-note')?.focus();
+      return;
+    }
+    document.getElementById('discard-other')?.classList.add('hidden');
+    App.confirmDiscard();
   },
 
   onDiscardNote() {
@@ -3647,50 +3776,16 @@ const App = {
     if (count) count.textContent = `${note?.value.length || 0}/300`;
   },
 
-  onDiscardPhoto(input) {
-    const file = input.files && input.files[0];
-    input.value = '';
-    if (!file) return;
-    if (!state.discardPhotos) state.discardPhotos = [];
-    if (state.discardPhotos.length >= 3) return;
-    state.discardPhotos.push(URL.createObjectURL(file));
-    App.renderDiscardPhotos();
-  },
-
-  removeDiscardPhoto(index) {
-    const url = state.discardPhotos[index];
-    if (url) URL.revokeObjectURL(url);
-    state.discardPhotos.splice(index, 1);
-    App.renderDiscardPhotos();
-  },
-
-  renderDiscardPhotos() {
-    const wrap = document.getElementById('discard-photos');
-    if (!wrap) return;
-    const photos = state.discardPhotos || [];
-    const thumbs = photos
-      .map(
-        (url, index) =>
-          `<span class="discard-thumb"><img src="${url}" alt="" /><button type="button" onclick="App.removeDiscardPhoto(${index})" aria-label="Remove photo">×</button></span>`
-      )
-      .join('');
-    const add =
-      photos.length >= 3
-        ? ''
-        : `<button type="button" class="discard-add" onclick="document.getElementById('discard-file').click()"><span>+</span><small>Up to three</small></button>`;
-    wrap.innerHTML = thumbs + add;
-  },
-
   confirmDiscard() {
-    if (!document.querySelector('input[name="discard-reason"]:checked')) return;
+    if (!state.discardReason) return;
     App.closeDiscardSheet();
     App.discardRecording();
   },
 
   discardRecording() {
-    const onRoute = state.mapMode === 'recording' || state.mapMode === 'enroute';
-    const fromBeginCard = beginCardVisible();
-    if (!onRoute && !fromBeginCard) return;
+    const onRoute = state.mapMode === 'recording' || (state.mapMode === 'enroute' && !state.enrouteArrived);
+    const fromActionCard = taskActionCardVisible() || beginCardVisible();
+    if (!onRoute && !fromActionCard) return;
     const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
     if (task) {
       task.display_state = 'discarded';
@@ -3699,10 +3794,19 @@ const App = {
     state.claimDeckKeptIds = (state.claimDeckKeptIds || []).filter((id) => id !== state.selectedTaskId);
     if (!onRoute) {
       const wasClaim = state.mapMode === 'claim';
+      const wasNext = state.mapMode === 'next' || state.collectMode === 'manual';
       state.selectedTaskId = null;
       state.enrouteArrived = false;
       if (wasClaim) {
         App.renderClaimDeck();
+      } else if (wasNext) {
+        const remaining =
+          typeof listNearbyManualTasks === 'function'
+            ? listNearbyManualTasks(state.userPos)
+            : listNearbyOpenTasks(state.userPos);
+        state.mapMode = 'next';
+        state.selectedTaskId = remaining[0]?.task.task_id || null;
+        App.renderNextTaskDeck();
       } else if (state.shiftActive || state.shiftPaused || state.continuousCollect) {
         const remaining = listNearbyOpenTasks(state.userPos);
         state.mapMode = 'next';
