@@ -342,7 +342,7 @@ body {
   background: #fff;
   border: 1px solid #eef2f7;
   border-radius: 18px;
-  padding: 22px 18px 8px;
+  padding: 22px 18px 16px;
   margin-bottom: 22px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
@@ -375,12 +375,124 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 4px;
+  padding: 14px 4px 8px;
   border-top: 1px solid #f1f5f9;
   font-size: 16px;
   font-weight: 500;
   color: #111827;
 }
+
+.device-setup-hint {
+  margin: 0 4px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.device-setup-card .device-list-heading-row {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.device-setup-card .device-list-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: none;
+  background: #f8fafc;
+}
+
+.hotspot-card {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.hotspot-title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.hotspot-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.hotspot-open,
+.hotspot-save {
+  width: 100%;
+  height: 48px;
+  border-radius: 24px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.hotspot-open {
+  border: 1.5px solid #d4d4d8;
+  background: #fff;
+  color: #3f3f46;
+}
+
+.hotspot-title + .hotspot-field {
+  margin-top: 0;
+}
+
+.hotspot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #64748b;
+}
+
+.hotspot-field input {
+  height: 46px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 550;
+  color: #111827;
+  background: #fff;
+  width: 100%;
+}
+
+.hotspot-field input:focus {
+  outline: none;
+  border-color: #7c5cbf;
+}
+
+.hotspot-save {
+  border: none;
+  background: #7c5cbf;
+  color: #fff;
+}
+
+.hotspot-save.is-saved,
+.hotspot-save:disabled {
+  background: #efeaf8;
+  color: #7c5cbf;
+  cursor: default;
+}
+
+.hotspot-save:active,
+.hotspot-open:active {
+  transform: scale(0.98);
+}
+
+
 
 .device-connected-list {
   display: flex;
@@ -2140,11 +2252,6 @@ body {
   top: 84px;
 }
 
-#screen-map.has-nav-dest.is-enroute:not(.is-arrived) .map-rail,
-#screen-map.has-nav-dest.is-recording .map-rail {
-  top: 132px;
-}
-
 #screen-map.is-recording .nav-banner,
 #screen-map.is-enroute .nav-banner {
   top: 140px;
@@ -2220,14 +2327,6 @@ body {
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-}
-
-.map-shift-panel.is-mode-hidden .map-session-strip {
-  padding-right: 10px;
-}
-
-.map-shift-panel.is-mode-hidden .collect-mode {
-  display: none !important;
 }
 
 .map-session-metrics {
@@ -2343,9 +2442,10 @@ body {
   transform: translateX(12px);
 }
 
-.collect-mode.is-locked .collect-auto-switch {
+.collect-mode.is-locked .collect-auto-switch,
+.collect-auto-switch:disabled {
   cursor: default;
-  opacity: 0.72;
+  opacity: 1;
 }
 
 .map-hud-pause {
@@ -3266,22 +3366,23 @@ body {
   align-items: center;
 }
 
-/* Destination bar — separate from black turn banner */
+/* Compact chip under the session counter: To next start + remaining distance */
 .nav-dest-bar {
   position: absolute;
-  top: 76px;
+  top: 130px;
   left: 12px;
-  right: 12px;
+  right: auto;
   z-index: 710;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #1a66ff;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100% - 80px);
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #2f6fed;
   color: #fff;
-  box-shadow: 0 6px 18px rgba(26, 102, 255, 0.32);
+  box-shadow: 0 4px 12px rgba(47, 111, 237, 0.28);
   pointer-events: none;
 }
 
@@ -3296,11 +3397,11 @@ body {
 
 .nav-dest-bar .nav-dest-kicker {
   flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #fff;
   line-height: 1.1;
 }
 
@@ -3317,25 +3418,21 @@ body {
 }
 
 .nav-dest-bar .nav-dest-remain {
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   color: #fff;
   line-height: 1;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 #screen-map.is-enroute:not(.is-arrived) .map-stats-widget,
 #screen-map.is-recording .map-stats-widget {
   top: 84px;
   right: 64px;
-}
-
-#screen-map.has-nav-dest.is-enroute:not(.is-arrived) .map-stats-widget {
-  top: 132px;
 }
 
 #screen-map.is-enroute:not(.is-arrived) .map-session-strip,
@@ -3875,6 +3972,34 @@ body {
   background: #e11d48;
 }
 
+.capture-upload-pip {
+  display: none;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.capture-upload-pip.is-on {
+  display: inline-flex;
+}
+
+.capture-upload-ring {
+  width: 36px;
+  height: 36px;
+  transform-origin: 50% 50%;
+}
+
+.capture-upload-pip.is-spin .capture-upload-ring {
+  animation: captureUploadSpin 0.7s linear 1;
+}
+
+@keyframes captureUploadSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .capture-title {
   font-size: 16px;
   font-weight: 700;
@@ -3897,6 +4022,38 @@ body {
   border-radius: 50%;
   background: var(--danger);
   animation: pulse 1.2s infinite;
+}
+
+.capture-dot.is-paused {
+  background: #f59e0b;
+  animation: none;
+}
+
+.capture-time.is-paused {
+  color: #b45309;
+}
+
+.capture-pause {
+  height: 52px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 16px;
+  background: #f3f4f6;
+  color: #111827;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.capture-pause:active {
+  transform: scale(0.98);
+}
+
+.capture-pause.is-resume {
+  background: #e11d48;
+  color: #fff;
 }
 
 @keyframes pulse {
@@ -7112,6 +7269,17 @@ body {
 .position-verify-btn--retry {
   background: #1a66ff;
   color: #fff;
+}
+
+.position-verify-btn--nav {
+  background: #1a66ff;
+  color: #fff;
+}
+
+.position-verify-btn--retry.is-outline {
+  background: #fff;
+  color: #1a66ff;
+  border: 1.5px solid #1a66ff;
 }
 
 .position-verify-btn--force {

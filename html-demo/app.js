@@ -315,13 +315,73 @@ function taskActionCardVisible() {
   return isClaimedTask(task) || isUnclaimedTask(task);
 }
 
+function readPausedSessions() {
+  try {
+    const data = JSON.parse(localStorage.getItem('rover-paused-tasks') || '{}');
+    return data && typeof data === 'object' ? data : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function pausedSessionFor(taskId) {
+  if (!taskId) return null;
+  if (!state.pausedSessions) state.pausedSessions = readPausedSessions();
+  const session = state.pausedSessions[taskId];
+  if (!session || !Number.isFinite(Number(session.recSeconds))) return null;
+  return session;
+}
+
+function savePausedSession(taskId) {
+  if (!taskId) return;
+  if (!state.pausedSessions) state.pausedSessions = readPausedSessions();
+  state.pausedSessions[taskId] = {
+    recSeconds: state.recSeconds || 0,
+    navDistanceM: state.navDistanceM || 0,
+    pausedAt: Date.now(),
+  };
+  try {
+    localStorage.setItem('rover-paused-tasks', JSON.stringify(state.pausedSessions));
+  } catch (err) {}
+}
+
+function restorePausedTasks() {
+  const sessions = readPausedSessions();
+  state.pausedSessions = sessions;
+  Object.keys(sessions).forEach((id) => {
+    const task = state.mapTasks.find((t) => t.task_id === id);
+    if (!task || ['completed', 'completed_local', 'discarded'].includes(task.display_state)) {
+      clearPausedSession(id);
+      return;
+    }
+    task.display_state = 'claimed';
+    task.claimed_by_me = true;
+  });
+}
+
+function latestPausedTaskId() {
+  const sessions = state.pausedSessions || readPausedSessions();
+  return Object.keys(sessions).sort((a, b) => (sessions[b]?.pausedAt || 0) - (sessions[a]?.pausedAt || 0))[0] || null;
+}
+
+function clearPausedSession(taskId) {
+  if (!taskId) return;
+  if (!state.pausedSessions) state.pausedSessions = readPausedSessions();
+  if (!state.pausedSessions[taskId]) return;
+  delete state.pausedSessions[taskId];
+  try {
+    localStorage.setItem('rover-paused-tasks', JSON.stringify(state.pausedSessions));
+  } catch (err) {}
+}
+
 function renderStartActions(task, label = 'Begin', action = `App.requestBegin('${task.task_id}')`) {
+  const text = pausedSessionFor(task.task_id) ? 'Resume' : label;
   return `<div class="task-sheet-actions split">
     <button type="button" class="task-release-btn" onclick="event.stopPropagation(); App.releaseTask('${task.task_id}')">
       ${TASK_SHEET_RELEASE_ICON}
       <span>Release</span>
     </button>
-    <button type="button" class="task-sheet-begin" onclick="event.stopPropagation(); ${action}">${label}</button>
+    <button type="button" class="task-sheet-begin" onclick="event.stopPropagation(); ${action}">${text}</button>
   </div>`;
 }
 
@@ -367,6 +427,7 @@ const state = {
   recSeconds: 0,
   recInterval: null,
   cardRecording: false,
+  autoUploadTimer: null,
   backgroundRecording: false,
   backgroundRecSeconds: 0,
   backgroundRecInterval: null,
@@ -381,6 +442,7 @@ const state = {
   activeRouteLayer: null,
   recordingAlertType: null,
   recordingAlertDismissed: {},
+  recordingPaused: false,
   recordingPausedByAlert: false,
   recordingDeviceFault: null,
   captureRestMode: false,
@@ -412,6 +474,12 @@ const state = {
   precheckScanTimer: null,
   precheckDiscoveredDevices: [],
   precheckSetupPhase: 'idle', // idle | location | bluetooth | scanning | ready
+  hotspotSaved: null,
+  hotspotEditing: false,
+  hotspotOn: false,
+  hotspotReturned: false,
+  hotspotPassVisible: false,
+  hotspotDraft: { ssid: '', password: '' },
   onboardingComplete: false,
   uploadDeviceConnected: false,
   uploadBatchRunning: false,
@@ -973,11 +1041,11 @@ function getMapStatsContext(screen) {
 
 function collectModeLocked() {
   if (state.screen !== 'map') return true;
-  return ['navigating', 'enroute', 'recording', 'completing'].includes(state.mapMode);
+  return ['navigating', 'recording', 'completing'].includes(state.mapMode);
 }
 
 function collectModeVisible() {
-  return state.screen === 'map' && !collectModeLocked();
+  return state.screen === 'map';
 }
 
 function updateMapStatsWidgets() {
@@ -1022,8 +1090,51 @@ function updateBackgroundRecordingBar() {
 }
 
 function isCaptureCounting() {
-  if (state.shiftPaused || state.discardSheetOpen) return false;
+  if (state.shiftPaused || state.discardSheetOpen || state.recordingPaused) return false;
   return state.mapMode === 'recording' || !!state.cardRecording;
+}
+
+function autoUploadActive() {
+  return state.collectMode === 'auto' && state.mapMode === 'enroute' && !state.enrouteArrived && !!state.cardRecording;
+}
+
+function playUploadPulse() {
+  const pip = document.getElementById('capture-upload-pip');
+  const ring = pip?.querySelector('.capture-upload-ring');
+  if (!pip || !ring) return;
+  pip.hidden = false;
+  pip.classList.remove('is-spin');
+  pip.classList.add('is-on');
+  void pip.offsetWidth;
+  pip.classList.add('is-spin');
+  const hide = () => {
+    pip.classList.remove('is-on', 'is-spin');
+    pip.hidden = true;
+    ring.removeEventListener('animationend', hide);
+  };
+  ring.addEventListener('animationend', hide);
+  clearTimeout(playUploadPulse._hide);
+  playUploadPulse._hide = setTimeout(hide, 800);
+}
+
+function syncAutoUploadPulse() {
+  const pip = document.getElementById('capture-upload-pip');
+  if (!autoUploadActive()) {
+    clearInterval(state.autoUploadTimer);
+    state.autoUploadTimer = null;
+    clearTimeout(playUploadPulse._hide);
+    pip?.classList.remove('is-on', 'is-spin');
+    if (pip) pip.hidden = true;
+    return;
+  }
+  if (state.autoUploadTimer) return;
+  state.autoUploadTimer = setInterval(() => {
+    if (!autoUploadActive()) {
+      syncAutoUploadPulse();
+      return;
+    }
+    playUploadPulse();
+  }, 5000);
 }
 
 function startBackgroundRecording() {
@@ -1132,6 +1243,7 @@ function pauseRecordingForAlert() {
 function resumeRecordingAfterAlert() {
   if (!state.recordingPausedByAlert || state.mapMode !== 'recording') return;
   state.recordingPausedByAlert = false;
+  if (state.recordingPaused) return;
   if (!state.recInterval) state.recInterval = setInterval(App.tickRec, 1000);
 }
 
@@ -1150,10 +1262,12 @@ function bootDemoRecording(alertType) {
     task.claimed_by_me = true;
   }
 
-  state.mapMode = 'recording';
-  state.recSeconds = alertType === 'storage_full' ? 498 : 42;
+  const session = pausedSessionFor(task && task.task_id);
+  state.mapMode = session && !alertType ? 'idle' : 'recording';
+  state.recordingPaused = false;
+  state.recSeconds = alertType === 'storage_full' ? 498 : session ? 0 : 42;
   clearInterval(state.recInterval);
-  state.recInterval = setInterval(App.tickRec, 1000);
+  state.recInterval = state.mapMode === 'recording' ? setInterval(App.tickRec, 1000) : null;
   state.recordingPausedByAlert = false;
 
   App.showLoginScreen();
@@ -1175,6 +1289,12 @@ function bindShiftControls() {
 function enterMapScreen() {
   if (!state.map) App.initMap();
   else state.map.invalidateSize();
+  if (state.mapMode === 'idle' && !state.selectedTaskId) {
+    const pausedId = latestPausedTaskId();
+    if (pausedId && state.mapTasks.some((t) => t.task_id === pausedId && isClaimedTask(t))) {
+      state.selectedTaskId = pausedId;
+    }
+  }
   App.renderMapTasks();
   syncMapTaskSheet();
   updateBackgroundRecordingBar();
@@ -1184,7 +1304,9 @@ function enterMapScreen() {
     const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
     if (task) requestAnimationFrame(() => fitTaskWithNeighbors(task));
   }
-  if (state.collectMode === 'manual' && !collectModeLocked() && state.mapMode === 'idle') {
+  const showingPaused =
+    state.mapMode === 'idle' && state.selectedTaskId && state.selectedTaskId === latestPausedTaskId();
+  if (state.collectMode === 'manual' && !collectModeLocked() && state.mapMode === 'idle' && !showingPaused) {
     showManualRecommend({ quiet: true });
   }
 }
@@ -1686,6 +1808,16 @@ function updateBottomNav() {
   });
 }
 
+function readSavedHotspot() {
+  try {
+    const data = JSON.parse(localStorage.getItem('rover-hotspot') || 'null');
+    if (!data || !String(data.ssid || '').trim() || !String(data.password || '').trim()) return null;
+    return { ssid: String(data.ssid), password: String(data.password) };
+  } catch (err) {
+    return null;
+  }
+}
+
 const App = {
   tabNav(screen) {
     if (state.screen === screen) {
@@ -2125,7 +2257,10 @@ const App = {
         setTimeout(() => state.precheckMap?.invalidateSize(), 120);
       });
     }
-    if (step === 'device') App.renderPrecheckDeviceUI();
+    if (step === 'device') {
+      App.renderPrecheckDeviceUI();
+      App.fillHotspotFields();
+    }
   },
 
   precheckFooterSkip() {
@@ -2223,6 +2358,46 @@ const App = {
 
   precheckDeviceToggle(on) {
     if (!on) toast('Device connection disabled');
+  },
+
+  fillHotspotFields() {
+    const saved = readSavedHotspot();
+    const ssid = document.getElementById('hotspot-ssid');
+    const pass = document.getElementById('hotspot-pass');
+    if (saved) {
+      if (ssid) ssid.value = saved.ssid;
+      if (pass) pass.value = saved.password;
+    }
+    App.syncHotspotSave();
+  },
+
+  syncHotspotSave() {
+    const btn = document.getElementById('hotspot-save');
+    if (!btn) return;
+    const saved = readSavedHotspot();
+    const ssid = document.getElementById('hotspot-ssid')?.value.trim() || '';
+    const password = document.getElementById('hotspot-pass')?.value.trim() || '';
+    const same = !!(saved && saved.ssid === ssid && saved.password === password);
+    btn.classList.toggle('is-saved', same);
+    btn.disabled = same;
+    btn.textContent = same ? 'Saved' : 'Save';
+  },
+
+  openHotspotSettings() {
+    toast('Opening Personal Hotspot');
+  },
+
+  saveHotspot() {
+    const ssid = document.getElementById('hotspot-ssid')?.value.trim() || '';
+    const password = document.getElementById('hotspot-pass')?.value.trim() || '';
+    if (!ssid || !password) {
+      toast('Enter name and password');
+      return;
+    }
+    try {
+      localStorage.setItem('rover-hotspot', JSON.stringify({ ssid, password }));
+    } catch (err) {}
+    App.syncHotspotSave();
   },
 
   precheckDeviceNext() {
@@ -2427,6 +2602,7 @@ const App = {
   },
 
   updateMapChrome() {
+    if (state.mapMode !== 'recording') state.recordingPaused = false;
     const topChrome = document.getElementById('map-top-chrome');
     const statusBar = document.getElementById('device-status-bar');
     const deviceDot = document.getElementById('device-dot');
@@ -2470,12 +2646,22 @@ const App = {
     const canSubmit = state.mapMode === 'recording' || state.mapMode === 'completing';
     document.querySelector('.capture-submit-row')?.classList.toggle('hidden', arrivedCard);
     document.getElementById('capture-start-record')?.classList.toggle('hidden', true);
+    const pauseBtn = document.getElementById('capture-pause');
+    const showPause = state.mapMode === 'recording';
+    const recPaused = showPause && !!state.recordingPaused;
+    pauseBtn?.classList.toggle('hidden', !showPause);
+    if (pauseBtn) {
+      pauseBtn.textContent = recPaused ? 'Resume' : 'Pause';
+      pauseBtn.classList.toggle('is-resume', recPaused);
+      pauseBtn.setAttribute('aria-label', recPaused ? 'Resume recording' : 'Pause recording');
+    }
     const submitBtn = document.getElementById('capture-submit');
     const showCaptureAction = canSubmit || enrouteDrive;
     submitBtn?.classList.toggle('hidden', !showCaptureAction);
     if (submitBtn) {
       const loading = state.mapMode === 'completing' && !!state.completeButtonLoading;
-      const enrouteRecord = enrouteDrive && !enrouteLive;
+      const autoEnroute = enrouteDrive && state.collectMode === 'auto';
+      const enrouteRecord = enrouteDrive && !enrouteLive && !autoEnroute;
       submitBtn.disabled = loading;
       submitBtn.classList.toggle('is-loading', loading);
       submitBtn.classList.toggle('is-record', enrouteRecord);
@@ -2483,6 +2669,7 @@ const App = {
       else if (enrouteRecord) submitBtn.textContent = 'Record';
       else submitBtn.textContent = 'Submit';
     }
+    syncAutoUploadPulse();
     document.getElementById('map-discard')?.classList.toggle('hidden', !(turnHud || taskActionCardVisible()));
     const foldBtn = document.getElementById('map-task-fold');
     const foldCard = document.getElementById('task-fold-card');
@@ -2501,10 +2688,10 @@ const App = {
           ? state.recSeconds
           : 0;
       document.getElementById('capture-time').textContent = formatTime(liveSecs);
-      document.getElementById('capture-dot')?.classList.toggle(
-        'hidden',
-        !(state.mapMode === 'recording' || enrouteLive)
-      );
+      document.getElementById('capture-time')?.classList.toggle('is-paused', recPaused);
+      const captureDot = document.getElementById('capture-dot');
+      captureDot?.classList.toggle('hidden', !(state.mapMode === 'recording' || enrouteLive));
+      captureDot?.classList.toggle('is-paused', recPaused);
     }
 
     const alertModal = document.getElementById('modal-recording-alert');
@@ -2535,6 +2722,13 @@ const App = {
       deviceBattWrap.className = 'device-batt-wrap warn has-bolt';
       statusBar.classList.remove('is-online');
       deviceSignal.dataset.level = '0';
+    } else if (state.mapMode === 'recording' && state.recordingPaused) {
+      deviceDot.className = 'device-dot warn';
+      deviceConn.textContent = 'PAUSED';
+      deviceBatt.textContent = '78';
+      deviceBattWrap.className = 'device-batt-wrap warn has-bolt';
+      statusBar.classList.remove('is-online');
+      deviceSignal.dataset.level = '3';
     } else if (state.mapMode === 'recording') {
       deviceDot.className = 'device-dot err';
       deviceConn.textContent = 'REC';
@@ -2573,6 +2767,7 @@ const App = {
     updateOrientButton();
     updateRecenterButton();
     document.getElementById('screen-map')?.classList.toggle('is-recording', state.mapMode === 'recording');
+    document.getElementById('screen-map')?.classList.toggle('is-rec-paused', state.mapMode === 'recording' && !!state.recordingPaused);
     document.getElementById('screen-map')?.classList.toggle('is-enroute', state.mapMode === 'enroute');
     document.getElementById('screen-map')?.classList.toggle('is-arrived', arrivedCard);
     if (collectModeLocked()) {
@@ -2581,7 +2776,7 @@ const App = {
   },
 
   tickRec() {
-    if (state.shiftPaused || state.discardSheetOpen) return;
+    if (state.shiftPaused || state.discardSheetOpen || state.recordingPaused) return;
     state.recSeconds++;
     const t = formatTime(state.recSeconds);
     const captureTime = document.getElementById('capture-time');
@@ -2893,6 +3088,7 @@ const App = {
     t.claimed_by_me = false;
     state.claimDeckKeptIds = state.claimDeckKeptIds.filter((x) => x !== id);
     resetBeginCaptureState();
+    clearPausedSession(id);
     state.selectedTaskId = id;
     if (state.collectMode === 'manual' && !collectModeLocked()) state.mapMode = 'next';
     else state.mapMode = 'claim';
@@ -2932,7 +3128,7 @@ const App = {
     const t = state.mapTasks.find((x) => x.task_id === id);
     if (!t || !isClaimedTask(t)) return;
     state.selectedTaskId = id;
-    if (isWithinBeginRadius(t)) {
+    if (pausedSessionFor(id) || isWithinBeginRadius(t)) {
       App.beginAcceptedTask(id);
       return;
     }
@@ -2942,8 +3138,11 @@ const App = {
 
   openPositionCheck(intent) {
     state.positionIntent = intent === 'submit' ? 'submit' : 'begin';
+    const isBegin = state.positionIntent === 'begin';
     const forceBtn = document.getElementById('position-force-btn');
-    if (forceBtn) forceBtn.textContent = state.positionIntent === 'submit' ? 'Force Submit' : 'Force Begin';
+    if (forceBtn) forceBtn.textContent = isBegin ? 'Force Begin' : 'Force Submit';
+    document.getElementById('position-nav-btn')?.classList.toggle('hidden', !isBegin);
+    document.getElementById('position-retry-btn')?.classList.toggle('is-outline', isBegin);
     document.getElementById('modal-position')?.classList.add('show');
   },
 
@@ -2975,6 +3174,16 @@ const App = {
       return;
     }
     App.forceBeginTask();
+  },
+
+  goToTaskStart() {
+    const id = state.pendingBeginTaskId || state.selectedTaskId;
+    App.closePositionCheck();
+    const task = state.mapTasks.find((t) => t.task_id === id);
+    if (!task || !isClaimedTask(task)) return;
+    state.selectedTaskId = id;
+    if (state.mapMode !== 'next') state.mapMode = 'next';
+    App.startNextNavigation(id);
   },
 
   forceBeginTask() {
@@ -3118,16 +3327,26 @@ const App = {
   },
 
   tapRecord() {
+    const session = pausedSessionFor(state.selectedTaskId);
     if (!state.shiftActive) beginShiftRecording();
     state.mapMode = 'recording';
     state.taskFoldOpen = false;
-    if (!state.recSeconds) state.recSeconds = 0;
     clearInterval(state.recInterval);
-    state.recInterval = setInterval(App.tickRec, 1000);
+    state.recInterval = null;
+    if (session) {
+      state.recordingPaused = true;
+      state.recSeconds = Number(session.recSeconds) || 0;
+      state.navResumeM = Number(session.navDistanceM) || 0;
+    } else {
+      state.recordingPaused = false;
+      state.recSeconds = 0;
+      state.navResumeM = 0;
+      state.recInterval = setInterval(App.tickRec, 1000);
+    }
     beginNavSimulation();
     App.updateMapChrome();
-    followCamera(true);
-    toast('Task recording started');
+    if (!session) followCamera(true);
+    toast(session ? 'Paused task ready to resume' : 'Task recording started');
   },
 
   startPushedRecording(force, options = {}) {
@@ -3170,6 +3389,7 @@ const App = {
 
   onCapturePrimary() {
     if (state.mapMode === 'enroute' && !state.enrouteArrived) {
+      if (state.collectMode === 'auto') return;
       if (state.cardRecording) App.submitEnrouteTake();
       else App.startPushedRecording(true);
       return;
@@ -3205,8 +3425,37 @@ const App = {
     App.completeTask({ force: true });
   },
 
+  toggleRecordingPause() {
+    if (state.mapMode !== 'recording') return;
+    if (state.recordingPaused) App.resumeRecording();
+    else App.pauseRecording();
+  },
+
+  pauseRecording() {
+    if (state.mapMode !== 'recording' || state.recordingPaused) return;
+    state.recordingPaused = true;
+    clearInterval(state.recInterval);
+    state.recInterval = null;
+    state.userSpeed = 0;
+    savePausedSession(state.selectedTaskId);
+    clearTimeout(state.navRecenterTimer);
+    App.updateMapChrome();
+    toast('Recording paused');
+  },
+
+  resumeRecording() {
+    if (state.mapMode !== 'recording' || !state.recordingPaused) return;
+    state.recordingPaused = false;
+    clearPausedSession(state.selectedTaskId);
+    if (!state.recInterval) state.recInterval = setInterval(App.tickRec, 1000);
+    App.updateMapChrome();
+    if (state.navFollow && !state.mapFreeBrowse) followCamera(false);
+    toast('Recording resumed');
+  },
+
   stopRecording() {
     if (state.mapMode !== 'recording') return;
+    state.recordingPaused = false;
     state.mapMode = 'completing';
     state.navFollow = false;
     state.mapFreeBrowse = false;
@@ -3228,6 +3477,7 @@ const App = {
 
     if (state.mapMode === 'recording') App.stopRecording();
 
+    clearPausedSession(t.task_id);
     t.display_state = 'completed_local';
     t.review_status = 'awaiting';
     state.todayLoggedTasks = Number(state.todayLoggedTasks || 0) + 1;
@@ -3478,6 +3728,7 @@ const App = {
     beginTransit(task);
     App.renderMapTasks({ skipFit: true });
     App.updateMapChrome();
+    if (state.collectMode === 'auto') App.startPushedRecording(true, { quiet: true });
     toast(state.collectMode === 'auto' ? 'Heading to the nearest task' : 'Navigation started');
   },
 
@@ -3652,7 +3903,7 @@ const App = {
   },
 
   toggleAutoMode() {
-    if (!collectModeVisible()) return;
+    if (!collectModeVisible() || collectModeLocked()) return;
     if (state.collectMode === 'auto') {
       document.getElementById('modal-auto-start')?.classList.remove('show');
       if (state.shiftActive || state.shiftPaused || state.continuousCollect) {
@@ -3666,7 +3917,7 @@ const App = {
 
   setCollectMode(mode, options = {}) {
     if (mode !== 'manual' && mode !== 'auto') return;
-    if (!collectModeVisible()) return;
+    if (!collectModeVisible() || collectModeLocked()) return;
     if (mode === 'auto') {
       if (state.collectMode === 'auto' && state.shiftActive) {
         toast('Auto mode is already running');
@@ -3787,6 +4038,7 @@ const App = {
     const fromActionCard = taskActionCardVisible() || beginCardVisible();
     if (!onRoute && !fromActionCard) return;
     const task = state.mapTasks.find((t) => t.task_id === state.selectedTaskId);
+    clearPausedSession(state.selectedTaskId);
     if (task) {
       task.display_state = 'discarded';
       task.claimed_by_me = false;
@@ -3853,10 +4105,14 @@ const App = {
 
   exitCapture() {
     const stopTransitBackground = state.mapMode === 'enroute' && state.enrouteStartedBackground;
+    const taskId = state.selectedTaskId;
+    const pausedExit = state.mapMode === 'recording' && !!state.recordingPaused && !!pausedSessionFor(taskId);
     clearInterval(state.recInterval);
     stopNavSimulation();
     state.mapMode = 'idle';
+    state.recordingPaused = false;
     state.recSeconds = 0;
+    state.navResumeM = 0;
     state.mapFreeBrowse = false;
     state.mapBearingMode = 'north';
     state.userHeadingTrusted = null;
@@ -3875,10 +4131,11 @@ const App = {
     App.renderPushedTaskCard(null);
     document.getElementById('task-sheet')?.classList.remove('is-next-deck', 'is-recommend');
     App.closeModal('modal-recording-alert');
+    if (pausedExit) state.selectedTaskId = taskId;
     App.renderMapTasks();
     App.renderTaskSheet();
     App.updateMapChrome();
-    toast(state.shiftActive ? 'Task cancelled' : 'Capture cancelled');
+    toast(pausedExit ? 'Task paused' : state.shiftActive ? 'Task cancelled' : 'Capture cancelled');
   },
 
   showRecordingAlert(type) {
@@ -4208,7 +4465,6 @@ const App = {
     t.display_state = 'claimed';
     t.claimed_by_me = true;
     resetBeginCaptureState();
-    state.recSeconds = 0;
     App.tapRecord();
   },
 
@@ -5010,6 +5266,7 @@ window.toast = toast;
 window.App = App;
 
 function bootApp() {
+  restorePausedTasks();
   const bootParams = new URLSearchParams(location.search);
   if (bootParams.get('checks') === 'fail' || bootParams.get('fail') === '1') {
     state.settings.simulateFailedChecks = true;

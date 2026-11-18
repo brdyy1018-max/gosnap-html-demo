@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css?v=20261021k" />
+    <link rel="stylesheet" href="styles.css?v=20261118f" />
   </head>
   <body>
     <div class="phone" id="app">
@@ -196,17 +196,31 @@
                     <span></span>
                   </label>
                 </div>
+                <p class="device-setup-hint">Turn on Device Connection to scan for and connect to a GoPro.</p>
                 <div class="device-connected-list hidden" id="device-connected-list" aria-live="polite"></div>
-              </div>
-              <div class="device-list-heading-row">
-                <h4 class="device-list-heading">Available Devices</h4>
-                <span class="device-list-hint">Select 1</span>
-              </div>
-              <div class="device-list-card" id="gopro-list">
-                <div class="device-scan-state device-scan-state--idle">
-                  <span>Waiting for Bluetooth…</span>
+                <div class="device-list-heading-row">
+                  <h4 class="device-list-heading">Available Devices</h4>
+                  <span class="device-list-hint">Select 1</span>
+                </div>
+                <div class="device-list-card" id="gopro-list">
+                  <div class="device-scan-state device-scan-state--idle">
+                    <span>Waiting for Bluetooth…</span>
+                  </div>
                 </div>
               </div>
+              <section class="hotspot-card" aria-labelledby="hotspot-title">
+                <h3 class="hotspot-title" id="hotspot-title">Hotspot Connection</h3>
+                <label class="hotspot-field">Hotspot SSID
+                  <input id="hotspot-ssid" type="text" autocomplete="off" oninput="App.syncHotspotSave()" />
+                </label>
+                <label class="hotspot-field">Hotspot Password
+                  <input id="hotspot-pass" type="text" autocomplete="off" oninput="App.syncHotspotSave()" />
+                </label>
+                <div class="hotspot-actions">
+                  <button type="button" class="hotspot-open" onclick="App.openHotspotSettings()">Open Settings</button>
+                  <button type="button" class="hotspot-save" id="hotspot-save" onclick="App.saveHotspot()">Save</button>
+                </div>
+              </section>
             </div>
           </div>
 
@@ -380,8 +394,15 @@
                 <span class="capture-dot" id="capture-dot"></span>
                 <span class="capture-time" id="capture-time">0:00</span>
               </div>
+              <button type="button" class="capture-pause hidden" id="capture-pause" onclick="App.toggleRecordingPause()">Pause</button>
               <button type="button" class="capture-start-record hidden" id="capture-start-record" hidden aria-hidden="true">Start recording</button>
               <button type="button" class="capture-submit" id="capture-submit" onclick="App.onCapturePrimary()">Submit</button>
+              <span class="capture-upload-pip" id="capture-upload-pip" hidden aria-hidden="true">
+                <svg class="capture-upload-ring" viewBox="0 0 36 36" aria-hidden="true">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#dbe7ff" stroke-width="3.5"/>
+                  <circle class="capture-upload-arc" cx="18" cy="18" r="14" fill="none" stroke="#1a73e8" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="28 60"/>
+                </svg>
+              </span>
             </div>
             <div class="capture-controls" id="capture-controls" hidden></div>
           </div>
@@ -877,7 +898,8 @@
         </div>
         <h3 id="position-verify-title">Position Verification</h3>
         <p id="position-verify-body">The target needs to be with in 500 meters of the location...</p>
-        <button type="button" class="position-verify-btn position-verify-btn--retry" onclick="App.retryPositionCheck()">Retry</button>
+        <button type="button" class="position-verify-btn position-verify-btn--nav hidden" id="position-nav-btn" onclick="App.goToTaskStart()">Go To Navigation</button>
+        <button type="button" class="position-verify-btn position-verify-btn--retry" id="position-retry-btn" onclick="App.retryPositionCheck()">Retry</button>
         <button type="button" class="position-verify-btn position-verify-btn--force" id="position-force-btn" onclick="App.confirmPositionCheck()">Force Begin</button>
         <button type="button" class="position-verify-btn position-verify-btn--close" onclick="App.closePositionCheck()">Close</button>
       </div>
@@ -976,8 +998,8 @@
       crossorigin=""
     ></script>
     <script src="vendor/leaflet-rotate.js?v=20261009a"></script>
-    <script src="nav.js?v=20261021a"></script>
-    <script src="app.js?v=20261021k"></script>
+    <script src="nav.js?v=20261118g"></script>
+    <script src="app.js?v=20261118h"></script>
     <script>
       (function () {
         var FALLBACK_MS = 2500;

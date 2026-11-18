@@ -473,12 +473,10 @@ function syncNavDestBar(task, pts, maneuver, arrived) {
   const atStart = !!arrived || (m.type === 'arrive' && m.remain < 40);
   const total = typeof routeCumul === 'function' ? (routeCumul(routePts).pop() || 0) : 0;
   const remainToStart = Math.max(0, total - (state.transitDistanceM || 0));
-  const showRemain =
-    !atStart && !(m.type === 'arrive' || Math.abs(m.remain - remainToStart) < 25);
   bar.className = `nav-dest-bar${atStart ? ' is-here' : ''}`;
-  bar.innerHTML = `
-    <span class="nav-dest-kicker">${atStart ? 'At task start' : 'To task start'}</span>
-    ${showRemain ? `<span class="nav-dest-remain">${formatNavMeters(remainToStart)}</span>` : ''}`;
+  bar.innerHTML = atStart
+    ? `<span class="nav-dest-kicker">At next start</span>`
+    : `<span class="nav-dest-kicker">To next start</span><span class="nav-dest-remain">${formatNavMeters(remainToStart)}</span>`;
 }
 
 function updateNavBanner() {
@@ -538,7 +536,7 @@ function updateOrientButton() {
 function updateRecenterButton() {}
 
 function navPaused() {
-  return !!(state.recordingPausedByAlert || state.shiftPaused || state.captureRestMode || state.discardSheetOpen || document.visibilityState === 'hidden');
+  return !!(state.recordingPaused || state.recordingPausedByAlert || state.shiftPaused || state.captureRestMode || state.discardSheetOpen || document.visibilityState === 'hidden');
 }
 
 function canAutoRecenter() {
@@ -619,9 +617,13 @@ function followCamera(animate) {
 const NAV_LEG_MS = 20000;
 const NAV_TICK_MS = 50;
 
-function resetNavLegClock() {
+function resetNavLegClock(alreadyM, total) {
   state.navLegT0 = performance.now();
   state.navLegPauseT0 = 0;
+  if (alreadyM > 0 && total > 0) {
+    const fraction = Math.min(0.98, alreadyM / total);
+    state.navLegT0 -= fraction * NAV_LEG_MS;
+  }
 }
 
 function navLegAlong(total) {
@@ -712,15 +714,15 @@ function beginNavSimulation() {
   task._routeLocked = true;
   const pts = getTaskLatLngs(task);
   taskManeuvers(task);
-  state.navDistanceM = 0;
+  state.navDistanceM = state.navResumeM || 0;
   state.mapFreeBrowse = false;
   state.navFollow = true;
   state.mapCameraMode = 'follow-north';
   state.routeOverviewHold = false;
   state.mapBearingMode = 'heading';
-  const sample = pointAlong(pts, 0);
+  const sample = pointAlong(pts, state.navDistanceM || 0);
   state.userPos = sample ? { lat: sample.lat, lng: sample.lng } : null;
-  state.guideBearing = guideBearing(pts, 0);
+  state.guideBearing = guideBearing(pts, state.navDistanceM || 0);
   state.userHeadingTrusted = state.guideBearing;
   if (typeof state.map.setBearing === 'function' && state.userHeadingTrusted != null) {
     state.map.setBearing(desiredBearing());
@@ -731,7 +733,7 @@ function beginNavSimulation() {
   updateNavBanner();
   if (window.App) App.renderMapTasks({ skipFit: true });
   followCamera(true);
-  resetNavLegClock();
+  resetNavLegClock(state.navDistanceM || 0, task._routeLen || 0);
   const loop = () => {
     if (state.navSimGen !== gen || state.mapMode !== 'recording') return;
     stepNavSimulation();
